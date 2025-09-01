@@ -1,0 +1,27 @@
+server:
+  port: 5002
+
+spring:
+  application:
+    name: rhythmai-task-service
+  profiles:
+    active: local
+  data:
+    mongodb:
+      uri: ${MONGODB_URI:mongodb://localhost:27017/rhythmai-tasks-local}
+
+logging:
+  level:
+    com.rhythmai.task: INFO
+    org.springframework.data.mongodb: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when_authorized

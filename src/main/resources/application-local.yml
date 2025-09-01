@@ -1,0 +1,15 @@
+spring:
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/rhythmai-tasks-local
+
+logging:
+  level:
+    com.rhythmai.task: DEBUG
+    org.springframework.data.mongodb: DEBUG
+    org.springframework.web: DEBUG
+
+management:
+  endpoint:
+    health:
+      show-details: always

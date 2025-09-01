@@ -1,0 +1,9 @@
+spring:
+  data:
+    mongodb:
+      uri: ${MONGODB_URI}
+
+logging:
+  level:
+    com.rhythmai.task: WARN
+    org.springframework.data.mongodb: WARN
