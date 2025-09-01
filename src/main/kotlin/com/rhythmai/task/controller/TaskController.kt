@@ -4,6 +4,13 @@ import com.rhythmai.task.model.*
 import com.rhythmai.task.security.AuthUtils
 import com.rhythmai.task.service.TaskService
 import com.rhythmai.task.service.TaskStats
+import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.Parameter
+import io.swagger.v3.oas.annotations.media.Content
+import io.swagger.v3.oas.annotations.media.Schema
+import io.swagger.v3.oas.annotations.responses.ApiResponse
+import io.swagger.v3.oas.annotations.responses.ApiResponses
+import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.validation.Valid
 import org.springframework.data.domain.PageRequest
@@ -15,15 +22,35 @@ import java.time.LocalDateTime
 
 @RestController
 @RequestMapping("/api/tasks")
+@Tag(name = "Tasks", description = "Task management operations")
 class TaskController(
     private val taskService: TaskService,
     private val authUtils: AuthUtils
 ) {
     
+    @GetMapping("/hello-world")
+    @Operation(summary = "Hello World", description = "Simple test endpoint to verify API connectivity")
+    @ApiResponses(value = [
+        ApiResponse(responseCode = "200", description = "Successful response",
+            content = [Content(mediaType = "application/json",
+                schema = Schema(example = "{\"message\": \"hello world !!\"}"))])
+    ])
+    fun helloWorld(): ResponseEntity<Map<String, String>> {
+        return ResponseEntity.ok(mapOf("message" to "hello world !!"))
+    }
+    
     @PostMapping
+    @Operation(summary = "Create Task", description = "Create a new task for the authenticated user")
+    @ApiResponses(value = [
+        ApiResponse(responseCode = "201", description = "Task created successfully",
+            content = [Content(mediaType = "application/json", schema = Schema(implementation = TaskResponse::class))]),
+        ApiResponse(responseCode = "400", description = "Invalid request data"),
+        ApiResponse(responseCode = "401", description = "Authentication required")
+    ])
     fun createTask(
         request: HttpServletRequest,
-        @Valid @RequestBody createRequest: CreateTaskRequest
+        @Valid @RequestBody 
+        @Parameter(description = "Task creation request") createRequest: CreateTaskRequest
     ): ResponseEntity<TaskResponse> {
         val userContext = authUtils.extractUserContext(request)
             ?: throw UnauthorizedException("User authentication required")
@@ -37,14 +64,19 @@ class TaskController(
     }
     
     @GetMapping
+    @Operation(summary = "Get Tasks", description = "Retrieve tasks with optional filtering and pagination")
+    @ApiResponses(value = [
+        ApiResponse(responseCode = "200", description = "Tasks retrieved successfully"),
+        ApiResponse(responseCode = "401", description = "Authentication required")
+    ])
     fun getAllTasks(
         request: HttpServletRequest,
-        @RequestParam(defaultValue = "0") page: Int,
-        @RequestParam(defaultValue = "20") size: Int,
-        @RequestParam(required = false) completed: Boolean?,
-        @RequestParam(required = false) priority: Priority?,
-        @RequestParam(required = false) tag: String?,
-        @RequestParam(required = false) search: String?
+        @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") page: Int,
+        @Parameter(description = "Page size") @RequestParam(defaultValue = "20") size: Int,
+        @Parameter(description = "Filter by completion status") @RequestParam(required = false) completed: Boolean?,
+        @Parameter(description = "Filter by priority level") @RequestParam(required = false) priority: Priority?,
+        @Parameter(description = "Filter by tag") @RequestParam(required = false) tag: String?,
+        @Parameter(description = "Search in title and description") @RequestParam(required = false) search: String?
     ): ResponseEntity<*> {
         val userContext = authUtils.extractUserContext(request)
             ?: throw UnauthorizedException("User authentication required")

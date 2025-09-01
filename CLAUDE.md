@@ -182,6 +182,14 @@ GET    /api/tasks/stats        # Get user statistics
 - ✅ **CRUD Operations**: Create, read, update, delete all functional
 - ✅ **Health Checks**: Spring Actuator endpoints operational
 - ✅ **Orchestration**: Integrated with master start/stop/status scripts
+- ✅ **Swagger Documentation**: Interactive API docs and testing interface
+
+### 📚 **API Documentation (Swagger/OpenAPI):**
+- **Framework**: SpringDoc OpenAPI 3.0.1 (version 2.2.0)
+- **Interactive UI**: http://localhost:5002/swagger-ui.html
+- **OpenAPI Spec**: http://localhost:5002/api-docs
+- **Features**: Auto-generated docs, interactive testing, parameter validation
+- **Integration**: Professional API documentation with examples and schemas
 
 ## Key Design Principles
 
@@ -216,6 +224,11 @@ GET    /api/tasks/stats        # Get user statistics
 ~/projects/start.sh                 # Start MongoDB + Frontend BFF + Task Service
 ~/projects/stop.sh                  # Stop all services
 ~/projects/status.sh                # Check all service status
+
+# API Documentation & Testing
+http://localhost:5002/swagger-ui.html    # Interactive Swagger UI
+http://localhost:5002/api-docs           # OpenAPI JSON specification
+curl http://localhost:5002/api/tasks/hello-world  # Test hello world endpoint
 ```
 
 ## MongoDB Collections
