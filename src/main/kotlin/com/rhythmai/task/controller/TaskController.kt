@@ -39,6 +39,7 @@ class TaskController(
         return ResponseEntity.ok(mapOf("message" to "hello world !!"))
     }
     
+    /*
     @PostMapping
     @Operation(summary = "Create Task", description = "Create a new task for the authenticated user")
     @ApiResponses(value = [
@@ -62,7 +63,9 @@ class TaskController(
         val task = taskService.createTask(userContext.userId, createRequest)
         return ResponseEntity.status(HttpStatus.CREATED).body(task)
     }
+    */
     
+    /*
     @GetMapping
     @Operation(summary = "Get Tasks", description = "Retrieve tasks with optional filtering and pagination")
     @ApiResponses(value = [
@@ -106,7 +109,9 @@ class TaskController(
             }
         }
     }
+    */
     
+    /*
     @GetMapping("/{id}")
     fun getTask(
         request: HttpServletRequest,
@@ -219,4 +224,5 @@ class TaskController(
         
         return ResponseEntity.ok(task)
     }
+    */
 }
