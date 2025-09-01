@@ -187,7 +187,7 @@ GET    /api/tasks/stats        # Get user statistics
 ### 📚 **API Documentation (Swagger/OpenAPI):**
 - **Framework**: SpringDoc OpenAPI 3.0.1 (version 2.2.0)
 - **Interactive UI**: http://localhost:5002/swagger-ui.html
-- **OpenAPI Spec**: http://localhost:5002/api-docs
+- **OpenAPI Spec**: http://localhost:5002/api-docs (simplified path)
 - **Features**: Auto-generated docs, interactive testing, parameter validation
 - **Integration**: Professional API documentation with examples and schemas
 
