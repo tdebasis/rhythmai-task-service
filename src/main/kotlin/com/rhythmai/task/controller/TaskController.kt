@@ -18,7 +18,8 @@ import org.springframework.data.domain.Pageable
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
-import java.time.LocalDateTime
+import java.time.Instant
+import java.time.Duration
 
 @RestController
 @RequestMapping("/api/tasks")
@@ -39,7 +40,6 @@ class TaskController(
         return ResponseEntity.ok(mapOf("message" to "hello world !!"))
     }
     
-    /*
     @PostMapping
     @Operation(summary = "Create Task", description = "Create a new task for the authenticated user")
     @ApiResponses(value = [
@@ -50,6 +50,12 @@ class TaskController(
     ])
     fun createTask(
         request: HttpServletRequest,
+        @Parameter(description = "User ID from BFF", required = true, example = "test-user-123")
+        @RequestHeader("X-User-ID") userId: String,
+        @Parameter(description = "User email from BFF", required = true, example = "test@example.com")
+        @RequestHeader("X-User-Email") userEmail: String,
+        @Parameter(description = "User name from BFF", required = true, example = "Test User")
+        @RequestHeader("X-User-Name") userName: String,
         @Valid @RequestBody 
         @Parameter(description = "Task creation request") createRequest: CreateTaskRequest
     ): ResponseEntity<TaskResponse> {
@@ -63,9 +69,7 @@ class TaskController(
         val task = taskService.createTask(userContext.userId, createRequest)
         return ResponseEntity.status(HttpStatus.CREATED).body(task)
     }
-    */
     
-    /*
     @GetMapping
     @Operation(summary = "Get Tasks", description = "Retrieve tasks with optional filtering and pagination")
     @ApiResponses(value = [
@@ -74,6 +78,12 @@ class TaskController(
     ])
     fun getAllTasks(
         request: HttpServletRequest,
+        @Parameter(description = "User ID from BFF", required = true, example = "test-user-123")
+        @RequestHeader("X-User-ID") userId: String,
+        @Parameter(description = "User email from BFF", required = true, example = "test@example.com")
+        @RequestHeader("X-User-Email") userEmail: String,
+        @Parameter(description = "User name from BFF", required = true, example = "Test User")
+        @RequestHeader("X-User-Name") userName: String,
         @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") page: Int,
         @Parameter(description = "Page size") @RequestParam(defaultValue = "20") size: Int,
         @Parameter(description = "Filter by completion status") @RequestParam(required = false) completed: Boolean?,
@@ -109,9 +119,7 @@ class TaskController(
             }
         }
     }
-    */
     
-    /*
     @GetMapping("/{id}")
     fun getTask(
         request: HttpServletRequest,
@@ -129,6 +137,12 @@ class TaskController(
     @PutMapping("/{id}")
     fun updateTask(
         request: HttpServletRequest,
+        @Parameter(description = "User ID from BFF", required = true, example = "test-user-123")
+        @RequestHeader("X-User-ID") userId: String,
+        @Parameter(description = "User email from BFF", required = true, example = "test@example.com")
+        @RequestHeader("X-User-Email") userEmail: String,
+        @Parameter(description = "User name from BFF", required = true, example = "Test User")
+        @RequestHeader("X-User-Name") userName: String,
         @PathVariable id: String,
         @Valid @RequestBody updateRequest: UpdateTaskRequest
     ): ResponseEntity<TaskResponse> {
@@ -166,8 +180,8 @@ class TaskController(
             ?: throw UnauthorizedException("User authentication required")
         
         val daysAhead = days ?: 7
-        val now = LocalDateTime.now()
-        val end = now.plusDays(daysAhead.toLong())
+        val now = Instant.now()
+        val end = now.plus(Duration.ofDays(daysAhead.toLong()))
         
         val tasks = taskService.getUpcomingTasks(userContext.userId, now, end)
         return ResponseEntity.ok(tasks)
@@ -224,5 +238,4 @@ class TaskController(
         
         return ResponseEntity.ok(task)
     }
-    */
 }

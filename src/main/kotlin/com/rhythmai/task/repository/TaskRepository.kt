@@ -7,7 +7,7 @@ import org.springframework.data.domain.Pageable
 import org.springframework.data.mongodb.repository.MongoRepository
 import org.springframework.data.mongodb.repository.Query
 import org.springframework.stereotype.Repository
-import java.time.LocalDateTime
+import java.time.Instant
 
 @Repository
 interface TaskRepository : MongoRepository<Task, String> {
@@ -24,16 +24,36 @@ interface TaskRepository : MongoRepository<Task, String> {
     
     fun findByUserIdAndDueDateBetweenOrderByDueDateAsc(
         userId: String, 
-        start: LocalDateTime, 
-        end: LocalDateTime
+        start: Instant, 
+        end: Instant
     ): List<Task>
     
     fun findByUserIdAndDueDateLessThanEqualAndCompletedFalseOrderByDueDateAsc(
         userId: String, 
-        dueDate: LocalDateTime
+        dueDate: Instant
     ): List<Task>
     
     fun findByUserIdAndTagsContainingOrderByCreatedAtDesc(userId: String, tag: String): List<Task>
+    
+    // Position management methods
+    fun findTopByUserIdOrderByPositionDesc(userId: String): Task?
+    
+    // Get max position for specific date
+    fun findTopByUserIdAndDueDateBetweenOrderByPositionDesc(
+        userId: String, 
+        startDate: Instant, 
+        endDate: Instant
+    ): Task?
+    
+    // Get tasks ordered by position for specific date
+    fun findByUserIdAndDueDateBetweenOrderByPositionAsc(
+        userId: String,
+        startDate: Instant,
+        endDate: Instant
+    ): List<Task>
+    
+    // Get tasks without due date (inbox)
+    fun findByUserIdAndDueDateIsNullOrderByPositionAsc(userId: String): List<Task>
     
     @Query("{'userId': ?0, 'title': {\$regex: ?1, \$options: 'i'}}")
     fun findByUserIdAndTitleContainingIgnoreCase(userId: String, title: String): List<Task>
@@ -45,4 +65,11 @@ interface TaskRepository : MongoRepository<Task, String> {
     fun searchByUserIdAndText(userId: String, searchText: String): List<Task>
     
     fun countByUserIdAndCompleted(userId: String, completed: Boolean): Long
+    
+    // Analytics support - completion tracking
+    fun findByUserIdAndCompletedTrueAndCompletedAtBetween(
+        userId: String, 
+        start: Instant, 
+        end: Instant
+    ): List<Task>
 }

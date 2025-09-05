@@ -205,6 +205,17 @@ GET    /api/tasks/stats        # Get user statistics
 4. **RESTful Design**: Follow standard REST patterns
 5. **Error Handling**: Proper exception handling with meaningful responses
 
+## Development Approach
+
+### 🤝 **Collaborative Discussion Mode**
+**IMPORTANT**: Before making any significant changes to the codebase, especially data models, API contracts, or architectural decisions, please:
+1. **Discuss thoroughly** with the user first
+2. **Present options** with pros and cons
+3. **Confirm the approach** before implementation
+4. **Explain the implications** of different choices
+
+This discussion-first approach ensures better decision-making and helps avoid costly refactoring later.
+
 ## Related Services
 
 - **rhythmai-frontend**: Express.js BFF + React app (port 3000)
@@ -243,3 +254,19 @@ This service manages:
 - `rhythmai-tasks`: User tasks with full task management data
 
 User data is managed by the BFF and shared via request headers.
+
+## 📋 Current State (September 2025)
+
+**📖 For all design decisions and rationale, see: [DECISION_LOG.md](DECISION_LOG.md)**
+
+### Quick Reference - Task Model
+- **Single `description` field** supporting Markdown (no richDescription)
+- **UTC-only dates** as `Instant` (timezone from frontend headers)
+- **Position scoped by date** (not global, resets when moving dates)
+- **Active endpoints**: POST /api/tasks, GET /api/tasks
+- **Swagger UI**: Headers now visible as input fields
+
+### Next Implementation Priority
+1. Position-based sorting in repository
+2. Sort parameters for GET endpoint
+3. BFF proxy configuration
