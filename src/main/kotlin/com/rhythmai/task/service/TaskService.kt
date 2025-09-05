@@ -15,7 +15,7 @@ class TaskService(
 ) {
     
     @Timed(value = "task.create", description = "Time taken to create a task")
-    fun createTask(userId: String, request: CreateTaskRequest): TaskResponse {
+    fun createTask(userId: String, request: CreateTaskRequest, context: String? = null): TaskResponse {
         // Calculate position using enhanced logic
         val calculatedPosition = calculatePositionForCreate(userId, request)
         
@@ -46,6 +46,22 @@ class TaskService(
                 else -> "auto_append"
             }
         ))
+        
+        // Track creation context if provided
+        context?.let {
+            analyticsService.trackWorkflowEvent("task_created_in_context", mapOf(
+                "context" to it,
+                "has_due_date" to (task.dueDate != null),
+                "has_project" to (task.projectId != null)
+            ))
+            
+            // Track inbox task creation specifically
+            if (it == "inbox" && task.dueDate == null && task.projectId == null) {
+                analyticsService.trackUserJourneyMilestone(userId, "inbox_task_created", mapOf(
+                    "priority" to task.priority.name
+                ))
+            }
+        }
         
         // User journey milestone tracking
         val totalTasks = taskRepository.countByUserId(userId)
@@ -111,8 +127,8 @@ class TaskService(
         )
     }
     
-    fun getTasksByPriority(userId: String, priority: Priority): List<TaskResponse> {
-        val tasks = taskRepository.findByUserIdAndPriorityOrderByCreatedAtDesc(userId, priority)
+    fun getTasksByPriority(userId: String, priority: Priority, completed: Boolean = false): List<TaskResponse> {
+        val tasks = taskRepository.findByUserIdAndPriorityAndCompletedOrderByCreatedAtDesc(userId, priority, completed)
         
         // Track priority filter usage
         analyticsService.trackWorkflowEvent("filter_applied", mapOf(
@@ -156,8 +172,8 @@ class TaskService(
         return tasks.map { TaskResponse.from(it) }
     }
     
-    fun getTasksByTag(userId: String, tag: String): List<TaskResponse> {
-        val tasks = taskRepository.findByUserIdAndTagsContainingOrderByCreatedAtDesc(userId, tag)
+    fun getTasksByTag(userId: String, tag: String, completed: Boolean = false): List<TaskResponse> {
+        val tasks = taskRepository.findByUserIdAndTagsContainingAndCompletedOrderByCreatedAtDesc(userId, tag, completed)
         
         // Track tag-based filtering
         analyticsService.trackWorkflowEvent("filter_applied", mapOf(
@@ -176,8 +192,8 @@ class TaskService(
     }
     
     @Timed(value = "task.search", description = "Time taken to search tasks")
-    fun searchTasks(userId: String, searchText: String): List<TaskResponse> {
-        val tasks = taskRepository.searchByUserIdAndText(userId, searchText)
+    fun searchTasks(userId: String, searchText: String, completed: Boolean = false): List<TaskResponse> {
+        val tasks = taskRepository.searchByUserIdAndTextAndCompleted(userId, searchText, completed)
         
         // Track search activity
         analyticsService.trackWorkflowEvent("search_performed", mapOf(
@@ -427,6 +443,105 @@ class TaskService(
             }
             else -> 1000
         }
+    }
+    
+    // View-based filtering methods
+    @Timed(value = "task.inbox", description = "Time taken to get inbox tasks")
+    fun getInboxTasks(userId: String, completed: Boolean, pageable: Pageable): TaskListResponse {
+        // Inbox: tasks without due date AND without project
+        val page = taskRepository.findByUserIdAndDueDateIsNullAndProjectIdIsNullAndCompletedOrderByPositionAsc(
+            userId, completed, pageable
+        )
+        
+        // Track inbox view usage
+        analyticsService.trackWorkflowEvent("inbox_viewed", mapOf(
+            "task_count" to page.totalElements,
+            "completed_filter" to completed,
+            "has_inbox_tasks" to page.hasContent()
+        ))
+        
+        // Track inbox zero achievement
+        if (!completed && page.totalElements == 0L) {
+            analyticsService.trackUserJourneyMilestone(userId, "inbox_zero_achieved", mapOf(
+                "timestamp" to Instant.now()
+            ))
+        }
+        
+        return TaskListResponse(
+            tasks = page.content.map { TaskResponse.from(it) },
+            total = page.totalElements,
+            page = pageable.pageNumber,
+            size = pageable.pageSize
+        )
+    }
+    
+    @Timed(value = "task.today", description = "Time taken to get today's tasks")
+    fun getTodayTasks(userId: String, timezone: String, completed: Boolean, pageable: Pageable): TaskListResponse {
+        val zone = java.time.ZoneId.of(timezone)
+        val todayStart = java.time.LocalDate.now(zone).atStartOfDay(zone).toInstant()
+        val todayEnd = todayStart.plus(1, java.time.temporal.ChronoUnit.DAYS)
+        
+        // Today's tasks + overdue tasks
+        val page = taskRepository.findTodayTasks(userId, todayStart, todayEnd, completed, pageable)
+        
+        // Track today view usage
+        analyticsService.trackWorkflowEvent("today_view", mapOf(
+            "task_count" to page.totalElements,
+            "timezone" to timezone,
+            "completed_filter" to completed,
+            "has_tasks_today" to page.hasContent()
+        ))
+        
+        // Check for productive day milestone
+        val completedToday = taskRepository.countByUserIdAndCompletedTrueAndCompletedAtBetween(
+            userId, todayStart, todayEnd
+        )
+        if (completedToday >= 5) {
+            analyticsService.trackUserJourneyMilestone(userId, "productive_day", mapOf(
+                "tasks_completed" to completedToday
+            ))
+        }
+        
+        return TaskListResponse(
+            tasks = page.content.map { TaskResponse.from(it) },
+            total = page.totalElements,
+            page = pageable.pageNumber,
+            size = pageable.pageSize
+        )
+    }
+    
+    @Timed(value = "task.upcoming", description = "Time taken to get upcoming tasks")
+    fun getUpcomingTasks(userId: String, timezone: String, completed: Boolean, pageable: Pageable): TaskListResponse {
+        val zone = java.time.ZoneId.of(timezone)
+        val tomorrowStart = java.time.LocalDate.now(zone).plusDays(1).atStartOfDay(zone).toInstant()
+        
+        // Future tasks (tomorrow onwards)
+        val page = taskRepository.findByUserIdAndDueDateGreaterThanEqualAndCompletedOrderByDueDateAscPositionAsc(
+            userId, tomorrowStart, completed, pageable
+        )
+        
+        // Track upcoming view usage
+        analyticsService.trackWorkflowEvent("upcoming_view", mapOf(
+            "task_count" to page.totalElements,
+            "timezone" to timezone,
+            "completed_filter" to completed,
+            "has_upcoming_tasks" to page.hasContent()
+        ))
+        
+        return TaskListResponse(
+            tasks = page.content.map { TaskResponse.from(it) },
+            total = page.totalElements,
+            page = pageable.pageNumber,
+            size = pageable.pageSize
+        )
+    }
+    
+    fun trackViewContext(userId: String, view: String) {
+        // Track which views users are accessing
+        analyticsService.trackFeatureUsage(userId, "view_navigation", mapOf(
+            "view" to view,
+            "timestamp" to Instant.now()
+        ))
     }
     
     private fun findNextTaskInContext(userId: String, context: String, afterPosition: Int): Task? {

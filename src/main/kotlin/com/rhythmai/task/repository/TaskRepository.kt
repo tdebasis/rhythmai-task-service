@@ -72,4 +72,67 @@ interface TaskRepository : MongoRepository<Task, String> {
         start: Instant, 
         end: Instant
     ): List<Task>
+    
+    // View-based filtering methods
+    
+    // Inbox: no date, no project
+    fun findByUserIdAndDueDateIsNullAndProjectIdIsNullAndCompletedOrderByPositionAsc(
+        userId: String,
+        completed: Boolean,
+        pageable: Pageable
+    ): Page<Task>
+    
+    // Today + overdue tasks
+    @Query("{'userId': ?0, \$or: [" +
+           "{'dueDate': {\$gte: ?1, \$lt: ?2}}, " +
+           "{'dueDate': {\$lt: ?1}, 'completed': false}" +
+           "], 'completed': ?3}")
+    fun findTodayTasks(
+        userId: String,
+        todayStart: Instant,
+        todayEnd: Instant,
+        completed: Boolean,
+        pageable: Pageable
+    ): Page<Task>
+    
+    // Upcoming tasks (future)
+    fun findByUserIdAndDueDateGreaterThanEqualAndCompletedOrderByDueDateAscPositionAsc(
+        userId: String,
+        startDate: Instant,
+        completed: Boolean,
+        pageable: Pageable
+    ): Page<Task>
+    
+    // Count for analytics
+    fun countByUserId(userId: String): Long
+    
+    // Count completed today
+    fun countByUserIdAndCompletedTrueAndCompletedAtBetween(
+        userId: String,
+        start: Instant,
+        end: Instant
+    ): Long
+    
+    // Updated search and filter methods with completed parameter
+    fun findByUserIdAndTagsContainingAndCompletedOrderByCreatedAtDesc(
+        userId: String,
+        tag: String,
+        completed: Boolean
+    ): List<Task>
+    
+    fun findByUserIdAndPriorityAndCompletedOrderByCreatedAtDesc(
+        userId: String,
+        priority: Priority,
+        completed: Boolean
+    ): List<Task>
+    
+    @Query("{'userId': ?0, \$or: [" +
+           "{'title': {\$regex: ?1, \$options: 'i'}}, " +
+           "{'description': {\$regex: ?1, \$options: 'i'}}" +
+           "], 'completed': ?2}")
+    fun searchByUserIdAndTextAndCompleted(
+        userId: String,
+        searchText: String,
+        completed: Boolean
+    ): List<Task>
 }

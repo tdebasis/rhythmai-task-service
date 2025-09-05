@@ -1,0 +1,23 @@
+spring:
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/rhythmai-tasks-test
+      auto-index-creation: true
+  
+  profiles:
+    active: test
+
+logging:
+  level:
+    root: INFO
+    com.rhythmai: DEBUG
+    org.springframework.data.mongodb: DEBUG
+
+# Disable actuator endpoints for tests
+management:
+  endpoints:
+    enabled-by-default: false
+
+# Test-specific configuration
+server:
+  port: 0  # Random port for testing

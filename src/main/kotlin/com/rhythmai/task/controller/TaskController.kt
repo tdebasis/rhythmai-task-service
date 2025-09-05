@@ -41,11 +41,24 @@ class TaskController(
     }
     
     @PostMapping
-    @Operation(summary = "Create Task", description = "Create a new task for the authenticated user")
+    @Operation(
+        summary = "Create Task", 
+        description = """
+            Create a new task for the authenticated user.
+            
+            **Context Parameter:**
+            The optional 'context' parameter tracks where the task was created from for analytics:
+            - **inbox**: Task created from inbox view (typically without due date)
+            - **today**: Task created from today view (typically with today's date)
+            - **upcoming**: Task created from upcoming view (typically with future date)
+            
+            This helps understand user behavior and optimize the UI experience.
+        """
+    )
     @ApiResponses(value = [
         ApiResponse(responseCode = "201", description = "Task created successfully",
             content = [Content(mediaType = "application/json", schema = Schema(implementation = TaskResponse::class))]),
-        ApiResponse(responseCode = "400", description = "Invalid request data"),
+        ApiResponse(responseCode = "400", description = "Invalid request data (e.g., missing title)"),
         ApiResponse(responseCode = "401", description = "Authentication required")
     ])
     fun createTask(
@@ -56,6 +69,15 @@ class TaskController(
         @RequestHeader("X-User-Email") userEmail: String,
         @Parameter(description = "User name from BFF", required = true, example = "Test User")
         @RequestHeader("X-User-Name") userName: String,
+        @Parameter(
+            description = """
+                Creation context for analytics tracking. Indicates which view the task was created from.
+                Used to understand user workflows and optimize the UI experience.
+                Does not affect task properties - only used for analytics.
+            """,
+            example = "inbox"
+        ) 
+        @RequestParam(required = false) context: String?,
         @Valid @RequestBody 
         @Parameter(description = "Task creation request") createRequest: CreateTaskRequest
     ): ResponseEntity<TaskResponse> {
@@ -66,14 +88,40 @@ class TaskController(
             throw UnauthorizedException("Invalid user context")
         }
         
-        val task = taskService.createTask(userContext.userId, createRequest)
+        val task = taskService.createTask(userContext.userId, createRequest, context)
         return ResponseEntity.status(HttpStatus.CREATED).body(task)
     }
     
     @GetMapping
-    @Operation(summary = "Get Tasks", description = "Retrieve tasks with optional filtering and pagination")
+    @Operation(
+        summary = "Get Tasks", 
+        description = """
+            Retrieve tasks with optional view filtering and pagination.
+            
+            **View Parameter Behavior:**
+            - **inbox**: Returns unorganized tasks (no due date AND no project). These are tasks captured for later processing.
+            - **today**: Returns tasks due today PLUS any overdue tasks. Includes all tasks that need attention today.
+            - **upcoming**: Returns future tasks (due date >= tomorrow). Sorted by due date then position.
+            - **null/omitted**: Returns all incomplete tasks (default behavior when no view specified).
+            
+            **Default Behavior:**
+            When no view parameter is provided, returns all tasks with completed=false (default).
+            
+            **Timezone Handling:**
+            - Uses X-User-Timezone header to determine "today" boundaries
+            - Falls back to UTC if timezone header not provided
+            - Example: In America/New_York, "today" spans from midnight EST to midnight EST
+            
+            **Sorting:**
+            - Inbox: Sorted by position
+            - Today: Sorted by due date (overdue first) then position
+            - Upcoming: Sorted by due date then position
+            - Default: Sorted by created date descending
+        """
+    )
     @ApiResponses(value = [
         ApiResponse(responseCode = "200", description = "Tasks retrieved successfully"),
+        ApiResponse(responseCode = "400", description = "Invalid view parameter value"),
         ApiResponse(responseCode = "401", description = "Authentication required")
     ])
     fun getAllTasks(
@@ -84,38 +132,110 @@ class TaskController(
         @RequestHeader("X-User-Email") userEmail: String,
         @Parameter(description = "User name from BFF", required = true, example = "Test User")
         @RequestHeader("X-User-Name") userName: String,
-        @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") page: Int,
-        @Parameter(description = "Page size") @RequestParam(defaultValue = "20") size: Int,
-        @Parameter(description = "Filter by completion status") @RequestParam(required = false) completed: Boolean?,
-        @Parameter(description = "Filter by priority level") @RequestParam(required = false) priority: Priority?,
-        @Parameter(description = "Filter by tag") @RequestParam(required = false) tag: String?,
-        @Parameter(description = "Search in title and description") @RequestParam(required = false) search: String?
+        @Parameter(
+            description = "User timezone for date calculations. Used to determine 'today' boundaries for view=today. Falls back to UTC if not provided.", 
+            example = "America/New_York"
+        )
+        @RequestHeader("X-User-Timezone", required = false) userTimezone: String?,
+        @Parameter(
+            description = """
+                View filter to retrieve specific task subsets:
+                - **inbox**: Unorganized tasks (no due date, no project) waiting to be processed
+                - **today**: Tasks due today + overdue tasks that need immediate attention
+                - **upcoming**: Future tasks (tomorrow onwards) for planning ahead
+                - **omitted**: All tasks matching other filters (default behavior)
+            """, 
+            schema = Schema(allowableValues = ["inbox", "today", "upcoming"])
+        )
+        @RequestParam(required = false) view: String?,
+        @Parameter(
+            description = "Page number for pagination (0-based indexing)",
+            example = "0"
+        ) 
+        @RequestParam(defaultValue = "0") page: Int,
+        @Parameter(
+            description = "Number of tasks per page (max 100)",
+            example = "20"
+        ) 
+        @RequestParam(defaultValue = "20") size: Int,
+        @Parameter(
+            description = """
+                Filter by completion status. 
+                - **true**: Show only completed tasks
+                - **false**: Show only incomplete tasks (default)
+                Works in combination with view parameter.
+            """
+        ) 
+        @RequestParam(required = false, defaultValue = "false") completed: Boolean,
+        @Parameter(
+            description = "Filter by priority level (HIGH, MEDIUM, LOW). Can be combined with view parameter.",
+            example = "HIGH"
+        ) 
+        @RequestParam(required = false) priority: Priority?,
+        @Parameter(
+            description = "Filter by tag. Returns tasks containing this tag. Can be combined with view parameter.",
+            example = "urgent"
+        ) 
+        @RequestParam(required = false) tag: String?,
+        @Parameter(
+            description = "Search text in task title and description. Overrides view parameter when provided.",
+            example = "meeting"
+        ) 
+        @RequestParam(required = false) search: String?
     ): ResponseEntity<*> {
         val userContext = authUtils.extractUserContext(request)
             ?: throw UnauthorizedException("User authentication required")
         
         val pageable = PageRequest.of(page, size)
+        val timezone = userTimezone ?: "UTC"
         
-        return when {
-            search != null -> {
-                val tasks = taskService.searchTasks(userContext.userId, search)
+        // Track view usage for analytics
+        view?.let {
+            taskService.trackViewContext(userContext.userId, it)
+        }
+        
+        // Handle view-based filtering
+        return when (view) {
+            "inbox" -> {
+                // Inbox: tasks without due date and without project
+                val tasks = taskService.getInboxTasks(userContext.userId, completed, pageable)
                 ResponseEntity.ok(tasks)
             }
-            tag != null -> {
-                val tasks = taskService.getTasksByTag(userContext.userId, tag)
+            "today" -> {
+                // Today: tasks due today (includes overdue)
+                val tasks = taskService.getTodayTasks(userContext.userId, timezone, completed, pageable)
                 ResponseEntity.ok(tasks)
             }
-            priority != null -> {
-                val tasks = taskService.getTasksByPriority(userContext.userId, priority)
+            "upcoming" -> {
+                // Upcoming: future tasks (tomorrow onwards)
+                val tasks = taskService.getUpcomingTasks(userContext.userId, timezone, completed, pageable)
                 ResponseEntity.ok(tasks)
             }
-            completed != null -> {
-                val taskList = taskService.getTasksByCompleted(userContext.userId, completed, pageable)
-                ResponseEntity.ok(taskList)
+            null -> {
+                // No view specified - apply standard filters
+                when {
+                    search != null -> {
+                        val tasks = taskService.searchTasks(userContext.userId, search, completed)
+                        ResponseEntity.ok(tasks)
+                    }
+                    tag != null -> {
+                        val tasks = taskService.getTasksByTag(userContext.userId, tag, completed)
+                        ResponseEntity.ok(tasks)
+                    }
+                    priority != null -> {
+                        val tasks = taskService.getTasksByPriority(userContext.userId, priority, completed)
+                        ResponseEntity.ok(tasks)
+                    }
+                    else -> {
+                        // Default: all tasks with completed filter (defaults to false)
+                        val taskList = taskService.getTasksByCompleted(userContext.userId, completed, pageable)
+                        ResponseEntity.ok(taskList)
+                    }
+                }
             }
             else -> {
-                val taskList = taskService.getAllTasks(userContext.userId, pageable)
-                ResponseEntity.ok(taskList)
+                // Invalid view parameter
+                throw BadRequestException("Invalid view parameter. Valid values: inbox, today, upcoming")
             }
         }
     }

@@ -11,3 +11,6 @@ class TaskNotFoundException(message: String) : RuntimeException(message)
 
 @ResponseStatus(HttpStatus.FORBIDDEN)
 class TaskAccessDeniedException(message: String) : RuntimeException(message)
+
+@ResponseStatus(HttpStatus.BAD_REQUEST)
+class BadRequestException(message: String) : RuntimeException(message)

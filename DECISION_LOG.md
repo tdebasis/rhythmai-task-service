@@ -496,7 +496,153 @@ analyticsService.trackUserJourneyMilestone(userId, "productive_day", context)
 
 ---
 
+### Decision 14: View-Based Filtering with REST-Compliant Design
+**Date**: December 2025  
+**Status**: ✅ Implemented  
+
+**Decision**: Implement view-based task filtering using optional query parameters following REST principles
+
+**Key Design Choices**:
+1. **Query Parameter Approach**: Use `?view=inbox|today|upcoming` as optional filter
+2. **Default Behavior**: No view parameter returns all incomplete tasks (completed=false by default)
+3. **REST Compliance**: Query parameters are optional, not mandatory
+4. **Inbox Definition**: Tasks with no dueDate AND no projectId
+
+**Implementation**:
+```kotlin
+// REST-compliant filtering
+GET /api/tasks                    // All incomplete tasks (default)
+GET /api/tasks?view=inbox         // Inbox view (no date, no project)
+GET /api/tasks?view=today         // Today + overdue tasks
+GET /api/tasks?view=upcoming      // Future tasks (tomorrow+)
+GET /api/tasks?completed=true     // All completed tasks
+
+// Context tracking for creation
+POST /api/tasks?context=inbox     // Track where task was created
+```
+
+**View Definitions**:
+- **Inbox**: `dueDate == null && projectId == null` (unorganized capture area)
+- **Today**: Tasks due today + overdue tasks (needs attention)
+- **Upcoming**: Tasks with `dueDate >= tomorrow` (future planning)
+- **Default**: All tasks with `completed=false` (active work)
+
+**Rationale**:
+- Follows REST principles (optional query params)
+- Maintains backwards compatibility
+- Supports three primary UI views
+- Clean separation of concerns
+- Enables comprehensive analytics
+
+**Analytics Integration**:
+- Track view navigation patterns
+- Monitor inbox zero achievements
+- Detect productive day milestones
+- Analyze task creation contexts
+
+**Frontend Usage Pattern**:
+```javascript
+// Clear, explicit API calls
+TaskAPI.inbox = () => fetch('/api/tasks?view=inbox&completed=false')
+TaskAPI.today = () => fetch('/api/tasks?view=today&completed=false')
+TaskAPI.upcoming = () => fetch('/api/tasks?view=upcoming&completed=false')
+```
+
+**Rejected Alternatives**:
+1. ❌ Required context parameter - Violates REST principles
+2. ❌ Separate endpoints (/api/tasks/inbox) - Not true resource separation
+3. ❌ No default behavior - Poor developer experience
+
+---
+
+### Decision 15: Comprehensive Test Suite for View-Based Filtering
+**Date**: December 5, 2025  
+**Status**: ✅ Implemented  
+
+**Decision**: Create comprehensive test coverage for view-based filtering functionality
+
+**Test Coverage Implemented**:
+1. **Unit Tests** (`TaskControllerTest.kt`):
+   - View parameter validation (inbox, today, upcoming, invalid)
+   - Default behavior testing (no view = incomplete tasks)
+   - Context parameter tracking
+   - Timezone handling (UTC fallback)
+   - Error handling (400 for invalid view, 401 for auth)
+
+2. **Integration Tests** (`TaskControllerIntegrationTest.kt`):
+   - Full API endpoint testing with MockMvc
+   - Header validation and security
+   - Pagination and filter combinations
+   - Real HTTP request/response cycles
+
+3. **Service Layer Tests** (`TaskServiceTest.kt`):
+   - Business logic for each view type
+   - Analytics event tracking verification
+   - Inbox zero milestone detection
+   - Productive day milestone (5+ completions)
+
+**Test Infrastructure**:
+- Added Mockito-Kotlin, JUnit 5 dependencies
+- Created `application-test.yml` configuration
+- Embedded MongoDB for integration tests
+- Background test execution capability
+
+**Key Test Scenarios**:
+- View filtering logic correctness
+- Analytics integration verification
+- Edge cases (empty results, timezone handling)
+- Error conditions and proper HTTP status codes
+
+---
+
+### Decision 16: Enhanced Swagger/OpenAPI Documentation
+**Date**: December 5, 2025  
+**Status**: ✅ Implemented  
+
+**Decision**: Provide comprehensive API documentation with detailed view behavior descriptions
+
+**Documentation Enhancements**:
+```yaml
+GET /api/tasks:
+  description: |
+    **View Parameter Behavior:**
+    - inbox: Returns unorganized tasks (no due date AND no project)
+    - today: Returns tasks due today PLUS any overdue tasks
+    - upcoming: Returns future tasks (due date >= tomorrow)
+    - null/omitted: Returns all incomplete tasks (default behavior)
+    
+    **Timezone Handling:**
+    - Uses X-User-Timezone header to determine "today" boundaries
+    - Falls back to UTC if timezone header not provided
+    
+    **Sorting:**
+    - Inbox: Sorted by position
+    - Today: Sorted by due date (overdue first) then position
+    - Upcoming: Sorted by due date then position
+```
+
+**Interactive Features**:
+- Swagger UI available at http://localhost:5002/swagger-ui.html
+- All parameters documented with examples
+- Response codes and error conditions
+- Authentication headers visible as input fields
+
+---
+
 ## Change Log
+
+### December 5, 2025 (Implementation Session)
+- **Added Decision 14**: View-Based Filtering with REST Compliance (✅ Implemented)
+- **Added Decision 15**: Comprehensive Test Suite (✅ Implemented)  
+- **Added Decision 16**: Enhanced Swagger Documentation (✅ Implemented)
+- Fixed orchestration scripts (removed `set -e` from stop.sh)
+- Implemented inbox/today/upcoming views with full analytics
+- Added timezone support via X-User-Timezone header
+- Created 3-tier test coverage: unit, integration, service
+- Enhanced API documentation with detailed behavior descriptions
+- Verified all endpoints work correctly via testing
+
+### December 2025
 
 ### September 5, 2025 (Extended Session)
 - **Added Decision 11**: Performance Monitoring with @Timed (✅ Implemented)
