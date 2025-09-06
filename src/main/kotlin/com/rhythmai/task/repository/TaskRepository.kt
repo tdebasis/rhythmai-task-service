@@ -12,48 +12,60 @@ import java.time.Instant
 @Repository
 interface TaskRepository : MongoRepository<Task, String> {
     
-    fun findByUserIdOrderByCreatedAtDesc(userId: String): List<Task>
+    fun findByUserIdOrderByPositionAsc(userId: String): List<Task>
     
-    fun findByUserIdOrderByCreatedAtDesc(userId: String, pageable: Pageable): Page<Task>
+    fun findByUserIdOrderByPositionAsc(userId: String, pageable: Pageable): Page<Task>
     
-    fun findByUserIdAndCompletedOrderByCreatedAtDesc(userId: String, completed: Boolean): List<Task>
+    fun findByUserIdAndCompletedOrderByPositionAsc(userId: String, completed: Boolean): List<Task>
     
-    fun findByUserIdAndCompletedOrderByCreatedAtDesc(userId: String, completed: Boolean, pageable: Pageable): Page<Task>
+    fun findByUserIdAndCompletedOrderByPositionAsc(userId: String, completed: Boolean, pageable: Pageable): Page<Task>
     
-    fun findByUserIdAndPriorityOrderByCreatedAtDesc(userId: String, priority: Priority): List<Task>
+    fun findByUserIdAndPriorityOrderByPositionAsc(userId: String, priority: Priority): List<Task>
     
-    fun findByUserIdAndDueDateBetweenOrderByDueDateAsc(
-        userId: String, 
-        start: Instant, 
-        end: Instant
-    ): List<Task>
+    // Legacy method - commented out after hybrid date migration
+    // fun findByUserIdAndDueDateBetweenOrderByDueDateAsc(
+    //     userId: String, 
+    //     start: Instant, 
+    //     end: Instant
+    // ): List<Task>
     
-    fun findByUserIdAndDueDateLessThanEqualAndCompletedFalseOrderByDueDateAsc(
-        userId: String, 
-        dueDate: Instant
-    ): List<Task>
+    // Legacy method - commented out after hybrid date migration
+    // fun findByUserIdAndDueDateLessThanEqualAndCompletedFalseOrderByDueDateAsc(
+    //     userId: String, 
+    //     dueDate: Instant
+    // ): List<Task>
     
-    fun findByUserIdAndTagsContainingOrderByCreatedAtDesc(userId: String, tag: String): List<Task>
+    fun findByUserIdAndTagsContainingOrderByPositionAsc(userId: String, tag: String): List<Task>
     
     // Position management methods
     fun findTopByUserIdOrderByPositionDesc(userId: String): Task?
     
+    // Legacy method - commented out after hybrid date migration
     // Get max position for specific date
-    fun findTopByUserIdAndDueDateBetweenOrderByPositionDesc(
-        userId: String, 
-        startDate: Instant, 
-        endDate: Instant
-    ): Task?
+    // fun findTopByUserIdAndDueDateBetweenOrderByPositionDesc(
+    //     userId: String, 
+    //     startDate: Instant, 
+    //     endDate: Instant
+    // ): Task?
     
+    // Legacy method - commented out after hybrid date migration
     // Get tasks ordered by position for specific date
-    fun findByUserIdAndDueDateBetweenOrderByPositionAsc(
-        userId: String,
-        startDate: Instant,
-        endDate: Instant
-    ): List<Task>
+    // fun findByUserIdAndDueDateBetweenOrderByPositionAsc(
+    //     userId: String,
+    //     startDate: Instant,
+    //     endDate: Instant
+    // ): List<Task>
     
     // Get tasks without due date (inbox)
-    fun findByUserIdAndDueDateIsNullOrderByPositionAsc(userId: String): List<Task>
+    fun findByUserIdAndDueByIsNullOrderByPositionAsc(userId: String): List<Task>
+    
+    // Get tasks for a specific date (all-day tasks), ordered by position
+    @Query("{'userId': ?0, 'dueBy.date': ?1}")
+    fun findByUserIdAndDueByDate(userId: String, date: String): List<Task>
+    
+    // Get tasks for a specific date ordered by position
+    @Query("{'userId': ?0, 'dueBy.date': ?1}")
+    fun findByUserIdAndDueByDateOrderByPositionAsc(userId: String, date: String): List<Task>
     
     @Query("{'userId': ?0, 'title': {\$regex: ?1, \$options: 'i'}}")
     fun findByUserIdAndTitleContainingIgnoreCase(userId: String, title: String): List<Task>
@@ -75,30 +87,53 @@ interface TaskRepository : MongoRepository<Task, String> {
     
     // View-based filtering methods
     
-    // Inbox: no date, no project
-    fun findByUserIdAndDueDateIsNullAndProjectIdIsNullAndCompletedOrderByPositionAsc(
+    // Inbox: no date, no project  
+    fun findByUserIdAndDueByIsNullAndProjectIdIsNullAndCompletedOrderByPositionAsc(
         userId: String,
         completed: Boolean,
         pageable: Pageable
     ): Page<Task>
     
-    // Today + overdue tasks
+    // Today + overdue tasks (nested DueBy structure)
     @Query("{'userId': ?0, \$or: [" +
-           "{'dueDate': {\$gte: ?1, \$lt: ?2}}, " +
-           "{'dueDate': {\$lt: ?1}, 'completed': false}" +
-           "], 'completed': ?3}")
+           "{'dueBy.date': ?1, 'dueBy.time': null}, " +  // All-day tasks due today
+           "{'dueBy.date': {\$lt: ?1}, 'dueBy.time': null, 'completed': false}, " +  // All-day overdue (incomplete only)
+           "{'dueBy.time': {\$gte: ?2, \$lt: ?3}}, " +  // Time-specific tasks due today
+           "{'dueBy.time': {\$lt: ?2}, 'completed': false}" +  // Time-specific overdue (incomplete only)
+           "], 'completed': ?4}")
     fun findTodayTasks(
         userId: String,
-        todayStart: Instant,
-        todayEnd: Instant,
+        todayDateStr: String,    // "2025-09-06" for date-only comparisons
+        todayStart: Instant,     // Start of today in user TZ as UTC
+        todayEnd: Instant,       // End of today in user TZ as UTC
         completed: Boolean,
         pageable: Pageable
     ): Page<Task>
     
-    // Upcoming tasks (future)
-    fun findByUserIdAndDueDateGreaterThanEqualAndCompletedOrderByDueDateAscPositionAsc(
+    // Today view: ALL tasks due today (completed or not) + incomplete overdue tasks (nested DueBy)
+    @Query("{'userId': ?0, \$or: [" +
+           "{'dueBy.date': ?1, 'dueBy.time': null}, " +  // All-day tasks due today
+           "{'dueBy.date': {\$lt: ?1}, 'dueBy.time': null, 'completed': false}, " +  // All-day overdue (incomplete only)
+           "{'dueBy.time': {\$gte: ?2, \$lt: ?3}}, " +  // Time-specific tasks due today
+           "{'dueBy.time': {\$lt: ?2}, 'completed': false}" +  // Time-specific overdue (incomplete only)
+           "]}")
+    fun findAllTodayViewTasks(
         userId: String,
-        startDate: Instant,
+        todayDateStr: String,    // "2025-09-06" for date-only comparisons
+        todayStart: Instant,     // Start of today in user TZ as UTC
+        todayEnd: Instant,       // End of today in user TZ as UTC
+        pageable: Pageable
+    ): Page<Task>
+    
+    // Upcoming tasks (future) - nested DueBy
+    @Query("{'userId': ?0, \$or: [" +
+           "{'dueBy.date': {\$gt: ?1}, 'dueBy.time': null}, " +  // All-day future tasks
+           "{'dueBy.time': {\$gte: ?2}}" +  // Time-specific future tasks
+           "], 'completed': ?3}")
+    fun findUpcomingTasks(
+        userId: String,
+        todayDateStr: String,    // Today's date to find tasks after
+        tomorrowStart: Instant,  // Start of tomorrow in user TZ as UTC
         completed: Boolean,
         pageable: Pageable
     ): Page<Task>
@@ -114,13 +149,13 @@ interface TaskRepository : MongoRepository<Task, String> {
     ): Long
     
     // Updated search and filter methods with completed parameter
-    fun findByUserIdAndTagsContainingAndCompletedOrderByCreatedAtDesc(
+    fun findByUserIdAndTagsContainingAndCompletedOrderByPositionAsc(
         userId: String,
         tag: String,
         completed: Boolean
     ): List<Task>
     
-    fun findByUserIdAndPriorityAndCompletedOrderByCreatedAtDesc(
+    fun findByUserIdAndPriorityAndCompletedOrderByPositionAsc(
         userId: String,
         priority: Priority,
         completed: Boolean

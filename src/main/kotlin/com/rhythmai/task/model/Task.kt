@@ -21,8 +21,8 @@ data class Task(
     val completed: Boolean = false,
     val priority: Priority = Priority.MEDIUM,
     
-    // Scheduling (UTC storage)
-    val dueDate: Instant? = null,
+    // Scheduling - Complex type encapsulating all temporal information
+    val dueBy: DueBy? = null,  // Null for inbox tasks, contains date/time/timezone/type for scheduled tasks
     
     // Organization
     val tags: List<String> = emptyList(),

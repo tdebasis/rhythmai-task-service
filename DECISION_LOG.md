@@ -629,6 +629,118 @@ GET /api/tasks:
 
 ---
 
+### Decision 17: Timezone Handling Strategy - Fixed Time First, Floating Later
+**Date**: December 6, 2025  
+**Status**: 📋 Planned  
+
+**Decision**: Start with fixed-time only implementation, design for future floating time support
+
+**Context**: After analyzing Todoist and Asana data models, we discovered two approaches to timezone handling:
+- **Todoist**: Supports both floating (default) and fixed time, optimized for personal productivity
+- **Asana**: Fixed time only, optimized for team collaboration
+- **Rhythmai Use Case**: Personal productivity with occasional collaboration (projects with assignees)
+
+**Implementation Strategy**:
+
+**Phase 1: Date-Only Tasks (Current)**
+```kotlin
+data class Task(
+    val dueDate: String? = null,     // "2025-09-05" ISO date string
+    val dueTime: Instant? = null,    // null for date-only tasks
+    val timezone: String? = null     // null for date-only tasks
+)
+```
+
+**Phase 2: Fixed Time Support (Next)**
+```kotlin
+data class Task(
+    val dueDate: String? = null,     // "2025-09-05" ISO date string  
+    val dueTime: Instant? = null,    // UTC timestamp when time specified
+    val timezone: String? = null,    // Original timezone for display ("America/New_York")
+    val timeType: TimeType = TimeType.FIXED  // Always FIXED in Phase 2
+)
+```
+
+**Phase 3: Floating Time Support (Future, if needed)**
+```kotlin
+enum class TimeType {
+    FIXED,       // Absolute UTC time (meetings, deadlines)
+    FLOATING,    // Local time that moves with user (routines, habits)
+    CONTEXTUAL   // Smart default based on project/assignee presence
+}
+
+// Smart defaults based on context:
+// - Personal task (no project/assignee) → FLOATING
+// - Shared task (has project/assignee) → FIXED
+```
+
+**Key Insights from Research**:
+
+1. **Todoist's Floating Time** (Source: https://www.todoist.com/help/articles/set-a-fixed-time-or-floating-time-for-a-task-YUYVp27q):
+   - **Default = Floating**: Tasks stay at same local time when traveling
+   - **Example**: "Morning workout at 7 AM" stays 7 AM whether in NYC or Tokyo
+   - **Collaboration**: All users see task at their local 7 AM
+   - **Use Case**: Personal routines, habits, self-care
+
+2. **Fixed Time (Standard)**:
+   - **Absolute moment**: Same UTC timestamp globally
+   - **Example**: "Team meeting at 9 AM EST" = 2 PM GMT = 11 PM JST
+   - **Collaboration**: Each user sees converted local time
+   - **Use Case**: Meetings, coordinated deadlines
+
+**Query Implementation for Mixed Time Types (Phase 3)**:
+```javascript
+// MongoDB query handling both floating and fixed times
+db.tasks.find({
+  "userId": userId,
+  "$or": [
+    // Floating tasks: compare against user's current local date
+    {
+      "timeType": "FLOATING",
+      "dueDate": "2025-09-06"  // User's local date
+    },
+    // Fixed tasks: compare against UTC timestamp range
+    {
+      "timeType": "FIXED",
+      "dueTime": {
+        "$gte": todayStartUTC,
+        "$lt": todayEndUTC
+      }
+    }
+  ]
+})
+```
+
+**Rationale for Phased Approach**:
+- **Simplicity First**: Fixed time covers collaboration use case
+- **Proven Path**: Most successful tools start without floating time
+- **User Feedback**: Add floating time only if users request it
+- **No Breaking Changes**: Data model supports both from the start
+
+**Travel Scenario Example**:
+```
+User in New York → Travels to Tokyo
+
+Fixed Time Task: "Client call at 2 PM EST"
+- In NYC: Shows as 2 PM
+- In Tokyo: Shows as 3 AM (next day)
+- Behavior: Adjusts to maintain same global moment
+
+Floating Time Task: "Morning meditation at 7 AM" (Phase 3)
+- In NYC: Shows as 7 AM
+- In Tokyo: Shows as 7 AM  
+- Behavior: Stays at same local time
+```
+
+**Business Value**:
+- **Phase 2**: Enables project collaboration and shared deadlines
+- **Phase 3**: Superior UX for travelers and digital nomads
+- **Competitive Advantage**: Few tools handle both modes well
+
+**Decision**: Implement Phase 2 (Fixed Time) immediately, defer Phase 3 (Floating Time) until user demand justifies complexity.
+
+---
+
 ## Change Log
 
 ### December 5, 2025 (Implementation Session)

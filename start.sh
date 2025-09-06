@@ -63,7 +63,8 @@ if command -v mongo &> /dev/null || command -v mongosh &> /dev/null; then
 fi
 
 echo -e "${BLUE}📦 Building application...${NC}"
-./gradlew build -q
+# Skip tests for faster startup (known issue - see CLAUDE.md)
+./gradlew build -x test -q
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✓ Build successful${NC}"

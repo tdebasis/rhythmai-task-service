@@ -4,6 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **📋 For complete project context, see: `../rhythmai-docs/CLAUDE.md`**
 
+## Essential Documentation to Read
+
+**IMPORTANT**: Always read these documents for context before starting work:
+1. **Architecture Documentation**: `~/projects/rhythmai-docs/architecture/` - System design and technical decisions
+2. **Requirements Documentation**: `~/projects/rhythmai-docs/requirements/` - Business requirements and user stories  
+3. **Business Context**: `~/projects/flowdeck/presentations/` - Business strategy and product vision
+
+These documents provide critical context for understanding the system's purpose, design decisions, and business goals.
+
 ## This Repository
 
 - **Purpose**: Task management microservice for Rhythmai personal work management app
@@ -229,11 +238,13 @@ GET    /api/tasks/stats        # Get user statistics
 ### 🤝 **Collaborative Discussion Mode**
 **IMPORTANT**: Before making any significant changes to the codebase, especially data models, API contracts, or architectural decisions, please:
 1. **Discuss thoroughly** with the user first
-2. **Present options** with pros and cons
-3. **Confirm the approach** before implementation
-4. **Explain the implications** of different choices
+2. **Present design choices** with pros and cons of each option
+3. **Seek confirmation** before implementing any changes
+4. **Limit the amount of changes** - make focused, incremental updates rather than large sweeping modifications
+5. **Explain the implications** of different choices
+6. **NEVER commit changes** - Do NOT use git commit unless explicitly asked by the user
 
-This discussion-first approach ensures better decision-making and helps avoid costly refactoring later.
+This discussion-first approach ensures better decision-making and helps avoid costly refactoring later. Always collaborate by presenting multiple design options, analyzing trade-offs, and waiting for explicit confirmation before proceeding with implementation.
 
 ## Related Services
 

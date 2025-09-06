@@ -69,6 +69,8 @@ class TaskController(
         @RequestHeader("X-User-Email") userEmail: String,
         @Parameter(description = "User name from BFF", required = true, example = "Test User")
         @RequestHeader("X-User-Name") userName: String,
+        @Parameter(description = "User timezone from BFF", required = false, example = "America/Los_Angeles")
+        @RequestHeader("X-User-Timezone", required = false) userTimezone: String?,
         @Parameter(
             description = """
                 Creation context for analytics tracking. Indicates which view the task was created from.
@@ -88,7 +90,8 @@ class TaskController(
             throw UnauthorizedException("Invalid user context")
         }
         
-        val task = taskService.createTask(userContext.userId, createRequest, context)
+        val timezone = userTimezone ?: "UTC"
+        val task = taskService.createTask(userContext.userId, createRequest, context, userContext.email, timezone)
         return ResponseEntity.status(HttpStatus.CREATED).body(task)
     }
     
@@ -100,17 +103,17 @@ class TaskController(
             
             **View Parameter Behavior:**
             - **inbox**: Returns unorganized tasks (no due date AND no project). These are tasks captured for later processing.
-            - **today**: Returns tasks due today PLUS any overdue tasks. Includes all tasks that need attention today.
+            - **today**: Returns ALL tasks due today (both completed and incomplete) PLUS any overdue incomplete tasks. UI can show/hide completed.
             - **upcoming**: Returns future tasks (due date >= tomorrow). Sorted by due date then position.
             - **null/omitted**: Returns all incomplete tasks (default behavior when no view specified).
             
             **Default Behavior:**
             When no view parameter is provided, returns all tasks with completed=false (default).
             
-            **Timezone Handling:**
-            - Uses X-User-Timezone header to determine "today" boundaries
-            - Falls back to UTC if timezone header not provided
-            - Example: In America/New_York, "today" spans from midnight EST to midnight EST
+            **Date Handling:**
+            - Tasks are date-based, not time-based
+            - "Today" means the current UTC date
+            - Time zones don't affect task dates - a task due Sept 5 is due Sept 5 everywhere
             
             **Sorting:**
             - Inbox: Sorted by position
@@ -132,10 +135,7 @@ class TaskController(
         @RequestHeader("X-User-Email") userEmail: String,
         @Parameter(description = "User name from BFF", required = true, example = "Test User")
         @RequestHeader("X-User-Name") userName: String,
-        @Parameter(
-            description = "User timezone for date calculations. Used to determine 'today' boundaries for view=today. Falls back to UTC if not provided.", 
-            example = "America/New_York"
-        )
+        @Parameter(description = "User timezone from BFF", required = false, example = "America/Los_Angeles")
         @RequestHeader("X-User-Timezone", required = false) userTimezone: String?,
         @Parameter(
             description = """
@@ -186,8 +186,8 @@ class TaskController(
         val userContext = authUtils.extractUserContext(request)
             ?: throw UnauthorizedException("User authentication required")
         
-        val pageable = PageRequest.of(page, size)
-        val timezone = userTimezone ?: "UTC"
+        // Add sorting by position for consistent ordering
+        val pageable = PageRequest.of(page, size, org.springframework.data.domain.Sort.by("position"))
         
         // Track view usage for analytics
         view?.let {
@@ -195,6 +195,7 @@ class TaskController(
         }
         
         // Handle view-based filtering
+        val timezone = userTimezone ?: "UTC"
         return when (view) {
             "inbox" -> {
                 // Inbox: tasks without due date and without project
@@ -202,13 +203,14 @@ class TaskController(
                 ResponseEntity.ok(tasks)
             }
             "today" -> {
-                // Today: tasks due today (includes overdue)
-                val tasks = taskService.getTodayTasks(userContext.userId, timezone, completed, pageable)
+                // Today: ALL tasks due today (completed & incomplete) + overdue incomplete tasks
+                // Note: completed parameter is ignored for today view - UI decides what to show
+                val tasks = taskService.getTodayTasks(userContext.userId, completed, pageable, timezone)
                 ResponseEntity.ok(tasks)
             }
             "upcoming" -> {
                 // Upcoming: future tasks (tomorrow onwards)
-                val tasks = taskService.getUpcomingTasks(userContext.userId, timezone, completed, pageable)
+                val tasks = taskService.getUpcomingTasks(userContext.userId, completed, pageable, timezone)
                 ResponseEntity.ok(tasks)
             }
             null -> {
@@ -263,13 +265,16 @@ class TaskController(
         @RequestHeader("X-User-Email") userEmail: String,
         @Parameter(description = "User name from BFF", required = true, example = "Test User")
         @RequestHeader("X-User-Name") userName: String,
+        @Parameter(description = "User timezone from BFF", required = false, example = "America/Los_Angeles")
+        @RequestHeader("X-User-Timezone", required = false) userTimezone: String?,
         @PathVariable id: String,
         @Valid @RequestBody updateRequest: UpdateTaskRequest
     ): ResponseEntity<TaskResponse> {
         val userContext = authUtils.extractUserContext(request)
             ?: throw UnauthorizedException("User authentication required")
         
-        val task = taskService.updateTask(userContext.userId, id, updateRequest)
+        val timezone = userTimezone ?: "UTC"
+        val task = taskService.updateTask(userContext.userId, id, updateRequest, userContext.email, timezone)
             ?: throw TaskNotFoundException("Task not found")
         
         return ResponseEntity.ok(task)
@@ -338,7 +343,7 @@ class TaskController(
             ?: throw UnauthorizedException("User authentication required")
         
         val updateRequest = UpdateTaskRequest(completed = true)
-        val task = taskService.updateTask(userContext.userId, id, updateRequest)
+        val task = taskService.updateTask(userContext.userId, id, updateRequest, userContext.email)
             ?: throw TaskNotFoundException("Task not found")
         
         return ResponseEntity.ok(task)
@@ -353,9 +358,38 @@ class TaskController(
             ?: throw UnauthorizedException("User authentication required")
         
         val updateRequest = UpdateTaskRequest(completed = false)
-        val task = taskService.updateTask(userContext.userId, id, updateRequest)
+        val task = taskService.updateTask(userContext.userId, id, updateRequest, userContext.email)
             ?: throw TaskNotFoundException("Task not found")
         
         return ResponseEntity.ok(task)
+    }
+    
+    @PatchMapping("/{id}/move")
+    @Operation(
+        summary = "Move/reorder a task",
+        description = "Move a task to a new position using various strategies (insertAfter, insertBefore, moveToTop, moveToBottom)"
+    )
+    @ApiResponses(value = [
+        ApiResponse(responseCode = "200", description = "Task moved successfully"),
+        ApiResponse(responseCode = "400", description = "Invalid move request"),
+        ApiResponse(responseCode = "401", description = "Unauthorized"),
+        ApiResponse(responseCode = "404", description = "Task or reference task not found")
+    ])
+    fun moveTask(
+        request: HttpServletRequest,
+        @PathVariable id: String,
+        @Valid @RequestBody moveRequest: MoveTaskRequest
+    ): ResponseEntity<TaskResponse> {
+        val userContext = authUtils.extractUserContext(request)
+            ?: throw UnauthorizedException("User authentication required")
+        
+        val movedTask = taskService.moveTask(
+            userId = userContext.userId,
+            taskId = id,
+            moveRequest = moveRequest,
+            userEmail = userContext.email
+        ) ?: throw TaskNotFoundException("Task not found")
+        
+        return ResponseEntity.ok(movedTask)
     }
 }

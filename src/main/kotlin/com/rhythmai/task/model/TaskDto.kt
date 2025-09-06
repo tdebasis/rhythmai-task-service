@@ -3,7 +3,18 @@ package com.rhythmai.task.model
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
 import jakarta.validation.constraints.Min
+import jakarta.validation.Valid
 import java.time.Instant
+
+/**
+ * Request DTO for due date/time information
+ */
+data class DueByRequest(
+    @field:NotBlank(message = "Date is required when setting due date")
+    val date: String,                   // ISO date string "2025-09-05"
+    val time: Instant? = null,          // UTC timestamp for time-specific tasks
+    val timeType: TimeType = TimeType.FIXED  // Future: support FLOATING
+)
 
 data class CreateTaskRequest(
     @field:NotBlank(message = "Title is required")
@@ -15,7 +26,11 @@ data class CreateTaskRequest(
     
     val projectId: String? = null,  // Optional project association
     val priority: Priority = Priority.MEDIUM,
-    val dueDate: Instant? = null,  // UTC timestamp
+    
+    // Complex type for all temporal information
+    @field:Valid
+    val dueBy: DueByRequest? = null,    // Null for inbox tasks
+    
     val tags: List<String> = emptyList(),
     
     @field:Min(0, message = "Position must be non-negative")
@@ -36,7 +51,12 @@ data class UpdateTaskRequest(
     val projectId: String? = null,
     val completed: Boolean? = null,
     val priority: Priority? = null,
-    val dueDate: Instant? = null,
+    
+    // Complex type for all temporal information
+    @field:Valid
+    val dueBy: DueByRequest? = null,    // Null to keep existing, empty object to clear
+    val clearDueDate: Boolean = false,  // Explicit flag to remove due date
+    
     val tags: List<String>? = null,
     val position: Int? = null,
     
@@ -45,6 +65,25 @@ data class UpdateTaskRequest(
     val insertAtTop: Boolean = false        // Insert at top of context
 )
 
+/**
+ * Response DTO for due date/time information
+ */
+data class DueByResponse(
+    val date: String,                   // ISO date string "2025-09-05"
+    val time: Instant? = null,          // UTC timestamp for time-specific tasks
+    val timeType: TimeType              // FIXED or FLOATING
+) {
+    companion object {
+        fun from(dueBy: DueBy): DueByResponse {
+            return DueByResponse(
+                date = dueBy.date,
+                time = dueBy.time,
+                timeType = dueBy.timeType
+            )
+        }
+    }
+}
+
 data class TaskResponse(
     val id: String,
     val title: String,
@@ -52,7 +91,10 @@ data class TaskResponse(
     val projectId: String?,
     val completed: Boolean,
     val priority: Priority,
-    val dueDate: Instant?,
+    
+    // Complex type with all temporal info
+    val dueBy: DueByResponse?,           // Null for inbox tasks
+    
     val tags: List<String>,
     val position: Int,
     val createdAt: Instant,
@@ -68,7 +110,7 @@ data class TaskResponse(
                 projectId = task.projectId,
                 completed = task.completed,
                 priority = task.priority,
-                dueDate = task.dueDate,
+                dueBy = task.dueBy?.let { DueByResponse.from(it) },
                 tags = task.tags,
                 position = task.position,
                 createdAt = task.createdAt,
@@ -85,3 +127,27 @@ data class TaskListResponse(
     val page: Int,
     val size: Int
 )
+
+/**
+ * Request DTO for moving/reordering a task
+ * Only one positioning strategy should be specified per request
+ */
+data class MoveTaskRequest(
+    val insertAfter: String? = null,    // Task ID to position after
+    val insertBefore: String? = null,   // Task ID to position before
+    val moveToTop: Boolean = false,     // Move to top of context
+    val moveToBottom: Boolean = false   // Move to bottom of context
+) {
+    init {
+        // Validate that only one positioning strategy is specified
+        val strategies = listOfNotNull(
+            insertAfter?.let { "insertAfter" },
+            insertBefore?.let { "insertBefore" },
+            if (moveToTop) "moveToTop" else null,
+            if (moveToBottom) "moveToBottom" else null
+        )
+        require(strategies.size == 1) {
+            "Exactly one positioning strategy must be specified (got: ${strategies.joinToString(", ")})"
+        }
+    }
+}
