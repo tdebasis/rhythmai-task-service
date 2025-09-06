@@ -741,7 +741,160 @@ Floating Time Task: "Morning meditation at 7 AM" (Phase 3)
 
 ---
 
+### Decision 18: Complex DueBy Data Model
+**Date**: December 6, 2025  
+**Status**: ✅ Implemented  
+
+**Decision**: Replace flat `dueDate: Instant?` with nested `dueBy: DueBy?` object containing all temporal information
+
+**Context**: During task reordering implementation, we discovered the need for more sophisticated date handling to support both all-day and time-specific tasks while maintaining clean position management.
+
+**Implementation**:
+```kotlin
+// Before (Flat Structure)
+data class Task(
+    val dueDate: Instant? = null  // Single field, UTC only
+)
+
+// After (Complex Structure)
+data class Task(
+    val dueBy: DueBy? = null  // Nested object with multiple temporal aspects
+)
+
+data class DueBy(
+    val date: String,                    // ISO date "2025-09-05"
+    val time: Instant? = null,          // UTC timestamp for time-specific
+    val timeType: TimeType = TimeType.FIXED
+)
+```
+
+**Benefits**:
+- **Clean API**: All temporal data grouped logically
+- **Extensible**: Easy to add timezone or floating time later
+- **Query Friendly**: MongoDB nested field queries (`dueBy.date`)
+- **Context Aware**: Date-string enables context-scoped positioning
+
+**Migration**: Implemented with backward compatibility via request/response DTOs
+
+---
+
+### Decision 19: PATCH /api/tasks/{id}/move Endpoint Design  
+**Date**: December 6, 2025  
+**Status**: ✅ Implemented  
+
+**Decision**: Implement dedicated move endpoint instead of generic update for task reordering
+
+**Research**: Analyzed Todoist (bulk item_reorder) and Asana (insertAfter/insertBefore) approaches
+
+**API Design**:
+```http
+PATCH /api/tasks/{id}/move
+{
+  "insertAfter": "task-id",    // Position after specific task
+  "insertBefore": "task-id",   // Position before specific task
+  "moveToTop": true,           // Move to top of context
+  "moveToBottom": true         // Move to bottom of context
+}
+```
+
+**Key Features**:
+- **Single Strategy Validation**: Exactly one positioning method per request
+- **Context Awareness**: Maintains inbox vs date-based separation
+- **Error Prevention**: Cross-context moves rejected with clear messages
+- **Future Ready**: Bulk reorder can be added later if needed
+
+**Alternative Considered**: Bulk reorder endpoint (deferred until proven necessary)
+
+---
+
+### Decision 20: Position-Based API Sorting
+**Date**: December 6, 2025  
+**Status**: ✅ Implemented  
+
+**Decision**: All API responses must be sorted by position (ascending) for consistent UI behavior
+
+**Problem**: APIs were returning tasks in `createdAt` order, making position-based reordering ineffective
+
+**Solution**: 
+- Repository methods: `OrderByCreatedAtDesc` → `OrderByPositionAsc`
+- Controller: `Sort.by("position")` applied to all Pageable objects
+- Service layer: Updated to use position-sorted repository methods
+
+**Impact**: All endpoints now return predictably ordered tasks suitable for drag-and-drop interfaces
+
+---
+
+### Decision 21: Context-Scoped Position Management
+**Date**: December 6, 2025  
+**Status**: ✅ Implemented  
+
+**Decision**: Position values are scoped by context ("inbox" vs "date:YYYY-MM-DD"), allowing independent sequences
+
+**Context Logic**:
+```kotlin
+private fun getDateContext(dueBy: DueBy?): String {
+    return if (dueBy != null) {
+        "date:${dueBy.date}"  // e.g., "date:2025-09-10"
+    } else {
+        "inbox"
+    }
+}
+```
+
+**Position Ranges**:
+- Inbox: 1000, 2000, 3000...
+- Date 2025-09-10: 1000, 2000, 3000... (independent sequence)
+- Date 2025-09-15: 1000, 2000, 3000... (independent sequence)
+
+**Benefits**:
+- **Logical Grouping**: Tasks on different dates don't interfere
+- **Clean Positions**: Each context starts fresh at 1000
+- **Move Safety**: Prevents invalid cross-context operations
+- **Scalable**: Supports thousands of tasks per date
+
+---
+
+### Decision 22: No Timezone Storage in DueBy
+**Date**: December 6, 2025  
+**Status**: ✅ Implemented  
+
+**Decision**: Explicitly exclude timezone field from DueBy object, contrary to initial research suggesting timezone storage
+
+**User Direction**: "ok we dont want timezone storage - just the complex DueBy"
+
+**Rationale**:
+- **Simplicity**: Avoids timezone complexity in Phase 1
+- **UTC Storage**: Time-specific tasks stored as UTC Instant
+- **Date-Only Focus**: All-day tasks use ISO date strings only
+- **Future Ready**: Timezone can be added later if needed
+
+**Final Schema**:
+```kotlin
+data class DueBy(
+    val date: String,                    // "2025-09-05"
+    val time: Instant? = null,          // UTC for time-specific
+    val timeType: TimeType = TimeType.FIXED
+    // NO timezone field
+)
+```
+
+This decision prioritizes implementation speed while maintaining extensibility for future timezone support.
+
+---
+
 ## Change Log
+
+### December 6, 2025 (Task Reordering & Complex DueBy Session)
+- **Added Decision 18**: Complex DueBy Data Model (✅ Implemented)
+- **Added Decision 19**: PATCH /api/tasks/{id}/move Endpoint Design (✅ Implemented)
+- **Added Decision 20**: Position-Based API Sorting (✅ Implemented)
+- **Added Decision 21**: Context-Scoped Position Management (✅ Implemented)
+- **Added Decision 22**: No Timezone Storage in DueBy (✅ Implemented)
+- **Completed**: Task reordering system with 4 positioning strategies
+- **Research**: Documented Todoist and Asana API approaches in reorder.md
+- **Enhanced**: All API responses now consistently sorted by position
+- **Validated**: Cross-context move prevention and error handling
+- **Future Planning**: Bulk reorder endpoint deferred until needed
 
 ### December 5, 2025 (Implementation Session)
 - **Added Decision 14**: View-Based Filtering with REST Compliance (✅ Implemented)
