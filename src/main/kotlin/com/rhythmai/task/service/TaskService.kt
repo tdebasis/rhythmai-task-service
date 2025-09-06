@@ -282,6 +282,15 @@ class TaskService(
         // Calculate position using enhanced logic
         val calculatedPosition = calculatePositionForUpdate(userId, existingTask, request)
         
+        // Create CompletedOn if marking as complete
+        val completedOn = if (request.completed == true && existingTask.completed != true) {
+            CompletedOn.now(userTimezone)
+        } else if (request.completed == false && existingTask.completed == true) {
+            null // Clearing completion
+        } else {
+            existingTask.completedOn
+        }
+        
         val updatedTask = existingTask.copy(
             title = request.title ?: existingTask.title,
             description = request.description ?: existingTask.description,
@@ -292,8 +301,7 @@ class TaskService(
             tags = request.tags ?: existingTask.tags,
             position = calculatedPosition,
             updatedAt = Instant.now(),
-            completedAt = if (request.completed == true && existingTask.completed != true) 
-                Instant.now() else existingTask.completedAt
+            completedOn = completedOn
         )
         
         // Log task update with user email
@@ -657,21 +665,35 @@ class TaskService(
     
     // View-based filtering methods
     @Timed(value = "task.inbox", description = "Time taken to get inbox tasks")
-    fun getInboxTasks(userId: String, completed: Boolean, pageable: Pageable): TaskListResponse {
-        // Inbox: tasks without due date AND without project
-        val page = taskRepository.findByUserIdAndDueByIsNullAndProjectIdIsNullAndCompletedOrderByPositionAsc(
-            userId, completed, pageable
+    fun getInboxTasks(
+        userId: String, 
+        completed: Boolean, 
+        pageable: Pageable,
+        userTimezone: String = "UTC"
+    ): TaskListResponse {
+        // Calculate today's date in user timezone
+        val userZone = java.time.ZoneId.of(userTimezone)
+        val todayDateStr = java.time.LocalDate.now(userZone).toString()
+        
+        // Inbox: tasks without due date AND without project, plus today's completed tasks
+        val page = taskRepository.findInboxTasksIncludingTodayCompleted(
+            userId, completed, todayDateStr, pageable
         )
         
         // Track inbox view usage
         analyticsService.trackWorkflowEvent("inbox_viewed", mapOf(
             "task_count" to page.totalElements,
             "completed_filter" to completed,
-            "has_inbox_tasks" to page.hasContent()
+            "has_inbox_tasks" to page.hasContent(),
+            "includes_today_completed" to true
         ))
         
-        // Track inbox zero achievement
-        if (!completed && page.totalElements == 0L) {
+        // Track inbox zero achievement (only for unorganized incomplete tasks)
+        val unorganizedCount = taskRepository.findByUserIdAndDueByIsNullAndProjectIdIsNullAndCompletedOrderByPositionAsc(
+            userId, false, pageable
+        ).totalElements
+        
+        if (unorganizedCount == 0L) {
             analyticsService.trackUserJourneyMilestone(userId, "inbox_zero_achieved", mapOf(
                 "timestamp" to Instant.now()
             ))
@@ -711,8 +733,8 @@ class TaskService(
         ))
         
         // Check for productive day milestone
-        val completedToday = taskRepository.countByUserIdAndCompletedTrueAndCompletedAtBetween(
-            userId, todayStart, todayEnd
+        val completedToday = taskRepository.countByUserIdAndCompletedTrueAndCompletedOnDateEquals(
+            userId, todayDateStr
         )
         if (completedToday >= 5) {
             analyticsService.trackUserJourneyMilestone(userId, "productive_day", mapOf(

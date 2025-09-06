@@ -287,7 +287,7 @@ User data is managed by the BFF and shared via request headers.
 
 ## 📋 Current State (December 2025)
 
-**📖 For all design decisions and rationale, see: [DECISION_LOG.md](DECISION_LOG.md)**
+**📖 For all design decisions and rationale, see: [DECISION_LOG.md](docs/DECISION_LOG.md)**
 
 ### 🎯 **Ready for Frontend Integration:**
 
@@ -315,6 +315,19 @@ PATCH /api/tasks/{id}/complete
 4. **Default Filters**: completed=false is default for active task views
 5. **Error Handling**: 400 for invalid views, 401 for missing auth
 
+### 📊 **Recent Updates (December 2025):**
+
+#### CompletedOn Complex Type Implementation
+- **New Structure**: Tasks now use `CompletedOn` complex type matching `DueBy` pattern
+- **Backward Compatibility**: Legacy `completedAt` and `completedDate` fields auto-migrate on read
+- **Migration Script**: `docs/migrate-completed-on.js` for one-time data migration
+- **Semantic Consistency**: Both `DueBy` and `CompletedOn` follow same structure (date, time, timeType)
+
+#### Today View Enhancement
+- **Now Includes**: Tasks completed today (regardless of original due date)
+- **Query Updates**: All MongoDB queries properly escaped with `'\$or'`, `'\$lt'`, etc.
+- **Count Fix**: Added `count = true` to aggregation queries to handle empty results
+
 ### 📊 **Analytics Events Tracked:**
 - View navigation (inbox/today/upcoming usage)
 - Task creation context (which view user was in)
@@ -322,10 +335,13 @@ PATCH /api/tasks/{id}/complete
 - Productive day milestones (5+ completions)
 - Feature usage (due dates, tags, projects, positioning)
 
-### ⚠️ **Known Issues for Tomorrow:**
-- Test compilation errors (affects startup) - tests pass but compile with warnings
-- Task service start script should skip tests by default for faster startup
-- Some integration tests need embedded MongoDB setup refinement
+### ✅ **Documentation Organization:**
+All technical documentation has been organized in the `docs/` folder:
+- `docs/DECISION_LOG.md` - All technical decisions and rationale
+- `docs/ASANA_DATA_MODEL_STUDY.md` - Asana data model research
+- `docs/TODOIST_DATA_MODEL_STUDY.md` - Todoist data model research
+- `docs/reorder.md` - Task reordering implementation details
+- `docs/migrate-completed-on.js` - MongoDB migration script for CompletedOn
 
 ### Quick Reference - Task Model
 - **Single `description` field** supporting Markdown (no richDescription)

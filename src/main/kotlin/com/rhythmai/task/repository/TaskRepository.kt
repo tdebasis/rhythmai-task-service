@@ -67,12 +67,12 @@ interface TaskRepository : MongoRepository<Task, String> {
     @Query("{'userId': ?0, 'dueBy.date': ?1}")
     fun findByUserIdAndDueByDateOrderByPositionAsc(userId: String, date: String): List<Task>
     
-    @Query("{'userId': ?0, 'title': {\$regex: ?1, \$options: 'i'}}")
+    @Query("{'userId': ?0, 'title': {'\$regex': ?1, '\$options': 'i'}}")
     fun findByUserIdAndTitleContainingIgnoreCase(userId: String, title: String): List<Task>
     
-    @Query("{'userId': ?0, \$or: [" +
-           "{'title': {\$regex: ?1, \$options: 'i'}}, " +
-           "{'description': {\$regex: ?1, \$options: 'i'}}" +
+    @Query("{'userId': ?0, '\$or': [" +
+           "{'title': {'\$regex': ?1, '\$options': 'i'}}, " +
+           "{'description': {'\$regex': ?1, '\$options': 'i'}}" +
            "]}")
     fun searchByUserIdAndText(userId: String, searchText: String): List<Task>
     
@@ -94,12 +94,26 @@ interface TaskRepository : MongoRepository<Task, String> {
         pageable: Pageable
     ): Page<Task>
     
+    // Inbox with today's completed: (no date + no project) OR (completed today)
+    // Supports both new completedOn.date and legacy completedDate fields
+    @Query("{'userId': ?0, '\$or': [" +
+           "{'dueBy': null, 'projectId': null, 'completed': ?1}, " +  // Regular inbox tasks
+           "{'completedOn.date': ?2, 'completed': true}, " +  // Today's completed (new format)
+           "{'completedDate': ?2, 'completed': true}" +  // Today's completed (legacy format)
+           "]}")
+    fun findInboxTasksIncludingTodayCompleted(
+        userId: String,
+        completed: Boolean,
+        todayDateStr: String,
+        pageable: Pageable
+    ): Page<Task>
+    
     // Today + overdue tasks (nested DueBy structure)
-    @Query("{'userId': ?0, \$or: [" +
+    @Query("{'userId': ?0, '\$or': [" +
            "{'dueBy.date': ?1, 'dueBy.time': null}, " +  // All-day tasks due today
-           "{'dueBy.date': {\$lt: ?1}, 'dueBy.time': null, 'completed': false}, " +  // All-day overdue (incomplete only)
-           "{'dueBy.time': {\$gte: ?2, \$lt: ?3}}, " +  // Time-specific tasks due today
-           "{'dueBy.time': {\$lt: ?2}, 'completed': false}" +  // Time-specific overdue (incomplete only)
+           "{'dueBy.date': {'\$lt': ?1}, 'dueBy.time': null, 'completed': false}, " +  // All-day overdue (incomplete only)
+           "{'dueBy.time': {'\$gte': ?2, '\$lt': ?3}}, " +  // Time-specific tasks due today
+           "{'dueBy.time': {'\$lt': ?2}, 'completed': false}" +  // Time-specific overdue (incomplete only)
            "], 'completed': ?4}")
     fun findTodayTasks(
         userId: String,
@@ -110,12 +124,14 @@ interface TaskRepository : MongoRepository<Task, String> {
         pageable: Pageable
     ): Page<Task>
     
-    // Today view: ALL tasks due today (completed or not) + incomplete overdue tasks (nested DueBy)
-    @Query("{'userId': ?0, \$or: [" +
+    // Today view: ALL tasks due today (completed or not) + incomplete overdue tasks + completed today (nested DueBy)
+    @Query("{'userId': ?0, '\$or': [" +
            "{'dueBy.date': ?1, 'dueBy.time': null}, " +  // All-day tasks due today
-           "{'dueBy.date': {\$lt: ?1}, 'dueBy.time': null, 'completed': false}, " +  // All-day overdue (incomplete only)
-           "{'dueBy.time': {\$gte: ?2, \$lt: ?3}}, " +  // Time-specific tasks due today
-           "{'dueBy.time': {\$lt: ?2}, 'completed': false}" +  // Time-specific overdue (incomplete only)
+           "{'dueBy.date': {'\$lt': ?1}, 'dueBy.time': null, 'completed': false}, " +  // All-day overdue (incomplete only)
+           "{'dueBy.time': {'\$gte': ?2, '\$lt': ?3}}, " +  // Time-specific tasks due today
+           "{'dueBy.time': {'\$lt': ?2}, 'completed': false}, " +  // Time-specific overdue (incomplete only)
+           "{'completedOn.date': ?1, 'completed': true}, " +  // Tasks completed today (new format)
+           "{'completedDate': ?1, 'completed': true}" +  // Tasks completed today (legacy format)
            "]}")
     fun findAllTodayViewTasks(
         userId: String,
@@ -126,9 +142,9 @@ interface TaskRepository : MongoRepository<Task, String> {
     ): Page<Task>
     
     // Upcoming tasks (future) - nested DueBy
-    @Query("{'userId': ?0, \$or: [" +
-           "{'dueBy.date': {\$gt: ?1}, 'dueBy.time': null}, " +  // All-day future tasks
-           "{'dueBy.time': {\$gte: ?2}}" +  // Time-specific future tasks
+    @Query("{'userId': ?0, '\$or': [" +
+           "{'dueBy.date': {'\$gt': ?1}, 'dueBy.time': null}, " +  // All-day future tasks
+           "{'dueBy.time': {'\$gte': ?2}}" +  // Time-specific future tasks
            "], 'completed': ?3}")
     fun findUpcomingTasks(
         userId: String,
@@ -141,7 +157,18 @@ interface TaskRepository : MongoRepository<Task, String> {
     // Count for analytics
     fun countByUserId(userId: String): Long
     
-    // Count completed today
+    // Count completed today - supports both new and legacy formats
+    @Query(value = "{'userId': ?0, 'completed': true, '\$or': [" +
+           "{'completedOn.date': ?1}, " +  // New format
+           "{'completedDate': ?1}" +  // Legacy format
+           "]}", count = true)
+    fun countByUserIdAndCompletedTrueAndCompletedOnDateEquals(
+        userId: String,
+        dateStr: String
+    ): Long
+    
+    // Legacy method for backward compatibility
+    @Deprecated("Use countByUserIdAndCompletedTrueAndCompletedOnDateEquals instead")
     fun countByUserIdAndCompletedTrueAndCompletedAtBetween(
         userId: String,
         start: Instant,
@@ -161,9 +188,9 @@ interface TaskRepository : MongoRepository<Task, String> {
         completed: Boolean
     ): List<Task>
     
-    @Query("{'userId': ?0, \$or: [" +
-           "{'title': {\$regex: ?1, \$options: 'i'}}, " +
-           "{'description': {\$regex: ?1, \$options: 'i'}}" +
+    @Query("{'userId': ?0, '\$or': [" +
+           "{'title': {'\$regex': ?1, '\$options': 'i'}}, " +
+           "{'description': {'\$regex': ?1, '\$options': 'i'}}" +
            "], 'completed': ?2}")
     fun searchByUserIdAndTextAndCompleted(
         userId: String,

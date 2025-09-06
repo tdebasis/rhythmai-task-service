@@ -84,6 +84,25 @@ data class DueByResponse(
     }
 }
 
+/**
+ * Response DTO for completion date/time information
+ */
+data class CompletedOnResponse(
+    val date: String,                   // ISO date string "2025-09-06" in user's timezone
+    val time: Instant,                  // UTC timestamp when completed
+    val timeType: TimeType              // Always FIXED for completions
+) {
+    companion object {
+        fun from(completedOn: CompletedOn): CompletedOnResponse {
+            return CompletedOnResponse(
+                date = completedOn.date,
+                time = completedOn.time,
+                timeType = completedOn.timeType
+            )
+        }
+    }
+}
+
 data class TaskResponse(
     val id: String,
     val title: String,
@@ -99,23 +118,33 @@ data class TaskResponse(
     val position: Int,
     val createdAt: Instant,
     val updatedAt: Instant,
+    
+    // New completion format
+    val completedOn: CompletedOnResponse?,
+    
+    // Legacy fields for backward compatibility
+    @Deprecated("Use completedOn instead")
     val completedAt: Instant?
 ) {
     companion object {
         fun from(task: Task): TaskResponse {
+            // Auto-migrate legacy fields to new format if needed
+            val migratedTask = task.migrateCompletionFields()
+            
             return TaskResponse(
-                id = task.id!!,
-                title = task.title,
-                description = task.description,
-                projectId = task.projectId,
-                completed = task.completed,
-                priority = task.priority,
-                dueBy = task.dueBy?.let { DueByResponse.from(it) },
-                tags = task.tags,
-                position = task.position,
-                createdAt = task.createdAt,
-                updatedAt = task.updatedAt,
-                completedAt = task.completedAt
+                id = migratedTask.id!!,
+                title = migratedTask.title,
+                description = migratedTask.description,
+                projectId = migratedTask.projectId,
+                completed = migratedTask.completed,
+                priority = migratedTask.priority,
+                dueBy = migratedTask.dueBy?.let { DueByResponse.from(it) },
+                tags = migratedTask.tags,
+                position = migratedTask.position,
+                createdAt = migratedTask.createdAt,
+                updatedAt = migratedTask.updatedAt,
+                completedOn = migratedTask.completedOn?.let { CompletedOnResponse.from(it) },
+                completedAt = migratedTask.getEffectiveCompletedTime()  // Backward compatibility
             )
         }
     }

@@ -198,8 +198,8 @@ class TaskController(
         val timezone = userTimezone ?: "UTC"
         return when (view) {
             "inbox" -> {
-                // Inbox: tasks without due date and without project
-                val tasks = taskService.getInboxTasks(userContext.userId, completed, pageable)
+                // Inbox: tasks without due date and without project, plus today's completed tasks
+                val tasks = taskService.getInboxTasks(userContext.userId, completed, pageable, timezone)
                 ResponseEntity.ok(tasks)
             }
             "today" -> {
@@ -337,13 +337,15 @@ class TaskController(
     @PatchMapping("/{id}/complete")
     fun completeTask(
         request: HttpServletRequest,
+        @RequestHeader("X-User-Timezone", required = false) userTimezone: String?,
         @PathVariable id: String
     ): ResponseEntity<TaskResponse> {
         val userContext = authUtils.extractUserContext(request)
             ?: throw UnauthorizedException("User authentication required")
         
+        val timezone = userTimezone ?: "UTC"
         val updateRequest = UpdateTaskRequest(completed = true)
-        val task = taskService.updateTask(userContext.userId, id, updateRequest, userContext.email)
+        val task = taskService.updateTask(userContext.userId, id, updateRequest, userContext.email, timezone)
             ?: throw TaskNotFoundException("Task not found")
         
         return ResponseEntity.ok(task)
@@ -352,13 +354,15 @@ class TaskController(
     @PatchMapping("/{id}/incomplete")
     fun markTaskIncomplete(
         request: HttpServletRequest,
+        @RequestHeader("X-User-Timezone", required = false) userTimezone: String?,
         @PathVariable id: String
     ): ResponseEntity<TaskResponse> {
         val userContext = authUtils.extractUserContext(request)
             ?: throw UnauthorizedException("User authentication required")
         
+        val timezone = userTimezone ?: "UTC"
         val updateRequest = UpdateTaskRequest(completed = false)
-        val task = taskService.updateTask(userContext.userId, id, updateRequest, userContext.email)
+        val task = taskService.updateTask(userContext.userId, id, updateRequest, userContext.email, timezone)
             ?: throw TaskNotFoundException("Task not found")
         
         return ResponseEntity.ok(task)
