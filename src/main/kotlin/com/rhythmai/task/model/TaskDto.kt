@@ -165,7 +165,8 @@ data class MoveTaskRequest(
     val insertAfter: String? = null,    // Task ID to position after
     val insertBefore: String? = null,   // Task ID to position before
     val moveToTop: Boolean = false,     // Move to top of context
-    val moveToBottom: Boolean = false   // Move to bottom of context
+    val moveToBottom: Boolean = false,  // Move to bottom of context
+    val targetDate: DueByRequest? = null  // Optional target date for cross-date moves
 ) {
     init {
         // Validate that only one positioning strategy is specified
@@ -175,8 +176,15 @@ data class MoveTaskRequest(
             if (moveToTop) "moveToTop" else null,
             if (moveToBottom) "moveToBottom" else null
         )
-        require(strategies.size == 1) {
-            "Exactly one positioning strategy must be specified (got: ${strategies.joinToString(", ")})"
+        
+        // Allow no positioning strategy when targetDate is provided (will append to end)
+        require(strategies.size <= 1) {
+            "At most one positioning strategy can be specified (got: ${strategies.joinToString(", ")})"
+        }
+        
+        // If no positioning strategy and no targetDate, it's a no-op
+        if (strategies.isEmpty() && targetDate == null) {
+            require(false) { "Either a positioning strategy or targetDate must be specified" }
         }
     }
 }

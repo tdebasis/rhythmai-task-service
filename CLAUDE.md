@@ -306,6 +306,10 @@ GET /api/tasks/{id}
 PUT /api/tasks/{id}
 DELETE /api/tasks/{id}
 PATCH /api/tasks/{id}/complete
+PATCH /api/tasks/{id}/incomplete
+
+# Task reordering and positioning
+PATCH /api/tasks/{id}/move  # With optional targetDate for cross-date moves
 ```
 
 **Frontend Integration Notes:**
@@ -316,6 +320,13 @@ PATCH /api/tasks/{id}/complete
 5. **Error Handling**: 400 for invalid views, 401 for missing auth
 
 ### 📊 **Recent Updates (December 2025):**
+
+#### Cross-Date Task Movement (NEW)
+- **Enhanced Move API**: `PATCH /api/tasks/{id}/move` now accepts optional `targetDate` field
+- **Atomic Updates**: Changes both date and position in single operation
+- **Smart Validation**: Ensures reference tasks (insertAfter/insertBefore) are in target date context
+- **Backward Compatible**: Works without targetDate for same-date repositioning
+- **Error Handling**: Clear validation messages for mismatched date contexts
 
 #### CompletedOn Complex Type Implementation
 - **New Structure**: Tasks now use `CompletedOn` complex type matching `DueBy` pattern

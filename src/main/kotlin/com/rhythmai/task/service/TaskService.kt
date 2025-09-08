@@ -442,48 +442,62 @@ class TaskService(
             return null
         }
         
-        // Get the context for this task
-        val context = getDateContext(task.dueBy)
+        // Determine target context (either from targetDate or current task's date)
+        val targetDueBy = moveRequest.targetDate?.let { targetDate ->
+            DueBy(targetDate.date, targetDate.time, targetDate.timeType) 
+        } ?: task.dueBy
+        
+        val targetContext = getDateContext(targetDueBy)
+        val currentContext = getDateContext(task.dueBy)
+        val isDateChange = targetContext != currentContext
         
         // Calculate new position based on move strategy
         val newPosition = when {
             moveRequest.insertAfter != null -> {
-                val afterTask = taskRepository.findByIdOrNull(moveRequest.insertAfter) ?: throw TaskNotFoundException("Reference task not found: ${moveRequest.insertAfter}")
+                val afterTask = taskRepository.findByIdOrNull(moveRequest.insertAfter) 
+                    ?: throw TaskNotFoundException("Reference task not found: ${moveRequest.insertAfter}")
                 if (afterTask.userId != userId) {
                     throw UnauthorizedException("Reference task belongs to different user")
                 }
-                // Verify same context
-                if (getDateContext(afterTask.dueBy) != context) {
-                    throw IllegalArgumentException("Cannot insert after task from different context")
+                // Verify reference task is in target context
+                if (getDateContext(afterTask.dueBy) != targetContext) {
+                    throw IllegalArgumentException("Reference task is not in the target date context")
                 }
-                calculatePositionAfterTask(afterTask, context, userId)
+                calculatePositionAfterTask(afterTask, targetContext, userId)
             }
             
             moveRequest.insertBefore != null -> {
-                val beforeTask = taskRepository.findByIdOrNull(moveRequest.insertBefore) ?: throw TaskNotFoundException("Reference task not found: ${moveRequest.insertBefore}")
+                val beforeTask = taskRepository.findByIdOrNull(moveRequest.insertBefore) 
+                    ?: throw TaskNotFoundException("Reference task not found: ${moveRequest.insertBefore}")
                 if (beforeTask.userId != userId) {
                     throw UnauthorizedException("Reference task belongs to different user")
                 }
-                // Verify same context
-                if (getDateContext(beforeTask.dueBy) != context) {
-                    throw IllegalArgumentException("Cannot insert before task from different context")
+                // Verify reference task is in target context
+                if (getDateContext(beforeTask.dueBy) != targetContext) {
+                    throw IllegalArgumentException("Reference task is not in the target date context")
                 }
-                calculatePositionBeforeTask(beforeTask, context, userId)
+                calculatePositionBeforeTask(beforeTask, targetContext, userId)
             }
             
             moveRequest.moveToTop -> {
-                getMinPositionForDateContext(userId, context) - 1000
+                getMinPositionForDateContext(userId, targetContext) - 1000
             }
             
             moveRequest.moveToBottom -> {
-                getMaxPositionForDateContext(userId, context) + 1000
+                getMaxPositionForDateContext(userId, targetContext) + 1000
             }
             
-            else -> task.position // Should not happen due to validation
+            // If only targetDate is provided, append to end of target context
+            isDateChange -> {
+                getMaxPositionForDateContext(userId, targetContext) + 1000
+            }
+            
+            else -> task.position // No change
         }
         
-        // Update task position
+        // Update task with new date and/or position
         val updatedTask = task.copy(
+            dueBy = targetDueBy,  // Update date if changed
             position = newPosition,
             updatedAt = Instant.now()
         )
@@ -491,7 +505,15 @@ class TaskService(
         val savedTask = taskRepository.save(updatedTask)
         
         // Log the move
-        println("📍 TASK MOVED${userEmail?.let { " by $it" } ?: ""} - '${task.title}' to position $newPosition in context: $context")
+        val moveDescription = when {
+            isDateChange && moveRequest.insertAfter != null -> "moved to ${targetContext} after another task"
+            isDateChange && moveRequest.insertBefore != null -> "moved to ${targetContext} before another task"
+            isDateChange && moveRequest.moveToTop -> "moved to top of ${targetContext}"
+            isDateChange && moveRequest.moveToBottom -> "moved to bottom of ${targetContext}"
+            isDateChange -> "moved to ${targetContext}"
+            else -> "reordered in ${currentContext}"
+        }
+        println("📍 TASK ${moveDescription.uppercase()}${userEmail?.let { " by $it" } ?: ""} - '${task.title}' at position $newPosition")
         
         // Track analytics
         analyticsService.trackWorkflowEvent("task_moved", mapOf(
@@ -500,9 +522,12 @@ class TaskService(
                 moveRequest.insertBefore != null -> "insert_before"
                 moveRequest.moveToTop -> "move_to_top"
                 moveRequest.moveToBottom -> "move_to_bottom"
-                else -> "unknown"
+                isDateChange -> "date_change"
+                else -> "position_only"
             },
-            "context" to context,
+            "date_changed" to isDateChange,
+            "from_context" to currentContext,
+            "to_context" to targetContext,
             "new_position" to newPosition
         ))
         
