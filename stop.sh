@@ -2,7 +2,7 @@
 
 # Rhythmai Task Service - Stop Script
 
-set -e
+# Note: Not using 'set -e' to allow script to continue even if individual commands fail
 
 SERVICE_NAME="rhythmai-task-service"
 PID_FILE="$SERVICE_NAME.pid"

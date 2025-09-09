@@ -882,7 +882,95 @@ This decision prioritizes implementation speed while maintaining extensibility f
 
 ---
 
+### Decision 23: Overdue Task Position Management
+**Date**: December 9, 2025  
+**Status**: ✅ Implemented  
+
+**Decision**: Implement dual-position system with dedicated `overduePosition` field for overdue task ordering
+
+**Problem**: Overdue tasks from different dates have conflicting position values (date-scoped positions)
+- Task from 2025-09-01 with position 1000
+- Task from 2025-09-05 with position 1000  
+- Both appear in Today view as overdue, but positions conflict
+
+**Solution Architecture**:
+
+**1. Dual Position System**:
+```kotlin
+data class Task(
+    val position: Int = 0,           // Date-scoped position
+    val overduePosition: Int? = null // Overdue context position
+)
+```
+
+**2. Incremental Positioning for New Overdue Tasks**:
+```kotlin
+// When tasks become overdue for first time
+private fun assignOverduePositions(tasks: List<Task>) {
+    val maxPosition = existingOverdue.maxPosition ?: 0
+    newOverdueTasks
+        .sortedBy { it.priority }  // HIGH first, then MEDIUM, then LOW
+        .forEachIndexed { index, task ->
+            task.overduePosition = maxPosition + ((index + 1) * 1000)
+        }
+}
+```
+
+**3. Auto-Detection of Overdue Context**:
+```kotlin
+// Backend automatically detects when both tasks are overdue
+val shouldUseOverdueContext = task.isOverdue() && referenceTask.isOverdue()
+if (shouldUseOverdueContext) {
+    // Use overduePosition for calculations
+}
+```
+
+**4. Transparent API Response**:
+```kotlin
+// Frontend always uses 'position' field
+TaskResponse.from(task): TaskResponse {
+    val effectivePosition = if (task.isOverdue()) {
+        task.overduePosition ?: task.position
+    } else {
+        task.position
+    }
+    return TaskResponse(position = effectivePosition, ...)
+}
+```
+
+**Key Design Decisions**:
+
+1. **Incremental Positioning**: New overdue tasks append to bottom, preserving manual reordering
+2. **Priority-Based Initial Order**: HIGH → MEDIUM → LOW when first becoming overdue
+3. **Auto-Detection**: No need for frontend to pass `context="overdue"`
+4. **Backward Compatible**: Frontend continues using `position` field
+5. **Persistent Storage**: `overduePosition` saved in MongoDB for consistency
+
+**Benefits**:
+- **No Position Conflicts**: Overdue tasks have independent position sequence
+- **Manual Reordering Preserved**: User's custom order maintained
+- **Simple Frontend**: No changes needed, uses existing `position` field
+- **Scalable**: Supports unlimited overdue tasks from any date range
+
+**Trade-offs**:
+- Additional field in database (minimal storage impact)
+- Slightly more complex position calculation logic
+- Need to maintain two position sequences
+
+---
+
 ## Change Log
+
+### December 9, 2025 (Overdue Task Position Management)
+- **Added Decision 23**: Overdue Task Position Management (✅ Implemented)
+- **Problem Solved**: Position conflicts for overdue tasks from different dates
+- **Implementation**: Dual-position system with `overduePosition` field
+- **Features Added**:
+  - Incremental positioning for newly overdue tasks
+  - Auto-detection of overdue context (no frontend changes needed)
+  - Transparent API response (overduePosition returned in position field)
+  - Priority-based initial ordering (HIGH → MEDIUM → LOW)
+- **Key Achievement**: Frontend can continue using `position` field without modifications
 
 ### December 6, 2025 (Task Reordering & Complex DueBy Session)
 - **Added Decision 18**: Complex DueBy Data Model (✅ Implemented)

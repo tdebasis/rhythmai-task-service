@@ -442,14 +442,22 @@ class TaskService(
             return null
         }
         
-        // Determine target context (either from targetDate or current task's date)
-        val targetDueBy = moveRequest.targetDate?.let { targetDate ->
-            DueBy(targetDate.date, targetDate.time, targetDate.timeType) 
-        } ?: task.dueBy
+        // Auto-detect overdue context based on task states
+        val todayDateStr = java.time.LocalDate.now().toString()
+        val taskIsOverdue = task.isOverdue(todayDateStr)
         
-        val targetContext = getDateContext(targetDueBy)
+        // Check if reference task is also overdue (we'll check this later for each case)
+        // For now, just check if explicit context is set
+        var isOverdueContext = moveRequest.context == "overdue"
+        
+        // We'll enhance this detection when we actually have the reference task
+        // This allows us to auto-detect without requiring explicit context
+        
+        // No date changes allowed - only position changes within same date context
         val currentContext = getDateContext(task.dueBy)
-        val isDateChange = targetContext != currentContext
+        
+        // Track the final decision on whether to use overdue context
+        var finalIsOverdueContext = isOverdueContext
         
         // Calculate new position based on move strategy
         val newPosition = when {
@@ -459,11 +467,30 @@ class TaskService(
                 if (afterTask.userId != userId) {
                     throw UnauthorizedException("Reference task belongs to different user")
                 }
-                // Verify reference task is in target context
-                if (getDateContext(afterTask.dueBy) != targetContext) {
-                    throw IllegalArgumentException("Reference task is not in the target date context")
+                
+                // Auto-detect if both tasks are overdue
+                val afterTaskIsOverdue = afterTask.isOverdue(todayDateStr)
+                val shouldUseOverdueContext = isOverdueContext || (taskIsOverdue && afterTaskIsOverdue)
+                
+                // Debug logging
+                println("🔍 AUTO-DETECT: task=${task.title} overdue=$taskIsOverdue, afterTask=${afterTask.title} overdue=$afterTaskIsOverdue, shouldUse=$shouldUseOverdueContext")
+                
+                // Use overdue context if auto-detected or explicitly set
+                if (shouldUseOverdueContext) {
+                    // Verify both tasks are actually overdue
+                    if (!taskIsOverdue || !afterTaskIsOverdue) {
+                        throw IllegalArgumentException("Both tasks must be overdue for overdue context reordering")
+                    }
+                    finalIsOverdueContext = true  // Update the final decision
+                    // For overdue context, calculate based on overduePosition
+                    calculateOverduePositionAfter(afterTask, userId)
+                } else {
+                    // Regular date context validation
+                    if (getDateContext(afterTask.dueBy) != currentContext) {
+                        throw IllegalArgumentException("Reference task is not in the same date context")
+                    }
+                    calculatePositionAfterTask(afterTask, currentContext, userId)
                 }
-                calculatePositionAfterTask(afterTask, targetContext, userId)
             }
             
             moveRequest.insertBefore != null -> {
@@ -472,45 +499,76 @@ class TaskService(
                 if (beforeTask.userId != userId) {
                     throw UnauthorizedException("Reference task belongs to different user")
                 }
-                // Verify reference task is in target context
-                if (getDateContext(beforeTask.dueBy) != targetContext) {
-                    throw IllegalArgumentException("Reference task is not in the target date context")
+                
+                // Auto-detect if both tasks are overdue
+                val beforeTaskIsOverdue = beforeTask.isOverdue(todayDateStr)
+                val shouldUseOverdueContext = isOverdueContext || (taskIsOverdue && beforeTaskIsOverdue)
+                
+                // Use overdue context if auto-detected or explicitly set
+                if (shouldUseOverdueContext) {
+                    // Verify both tasks are actually overdue
+                    if (!taskIsOverdue || !beforeTaskIsOverdue) {
+                        throw IllegalArgumentException("Both tasks must be overdue for overdue context reordering")
+                    }
+                    finalIsOverdueContext = true  // Update the final decision
+                    // For overdue context, calculate based on overduePosition
+                    calculateOverduePositionBefore(beforeTask, userId)
+                } else {
+                    // Regular date context validation
+                    if (getDateContext(beforeTask.dueBy) != currentContext) {
+                        throw IllegalArgumentException("Reference task is not in the same date context")
+                    }
+                    calculatePositionBeforeTask(beforeTask, currentContext, userId)
                 }
-                calculatePositionBeforeTask(beforeTask, targetContext, userId)
             }
             
             moveRequest.moveToTop -> {
-                getMinPositionForDateContext(userId, targetContext) - 1000
+                finalIsOverdueContext = isOverdueContext || taskIsOverdue
+                if (finalIsOverdueContext) {
+                    // For overdue context, find minimum overduePosition
+                    getMinOverduePosition(userId) - 1000
+                } else {
+                    getMinPositionForDateContext(userId, currentContext) - 1000
+                }
             }
             
             moveRequest.moveToBottom -> {
-                getMaxPositionForDateContext(userId, targetContext) + 1000
-            }
-            
-            // If only targetDate is provided, append to end of target context
-            isDateChange -> {
-                getMaxPositionForDateContext(userId, targetContext) + 1000
+                finalIsOverdueContext = isOverdueContext || taskIsOverdue
+                if (finalIsOverdueContext) {
+                    // For overdue context, find maximum overduePosition
+                    getMaxOverduePosition(userId) + 1000
+                } else {
+                    getMaxPositionForDateContext(userId, currentContext) + 1000
+                }
             }
             
             else -> task.position // No change
         }
         
-        // Update task with new date and/or position
-        val updatedTask = task.copy(
-            dueBy = targetDueBy,  // Update date if changed
-            position = newPosition,
-            updatedAt = Instant.now()
-        )
+        // Update task with new position only (no date changes)
+        val updatedTask = if (finalIsOverdueContext) {
+            // For overdue context, update overduePosition instead of position
+            task.copy(
+                overduePosition = newPosition,
+                updatedAt = Instant.now()
+            )
+        } else {
+            // For regular moves, update position only
+            task.copy(
+                position = newPosition,
+                updatedAt = Instant.now()
+            )
+        }
         
         val savedTask = taskRepository.save(updatedTask)
         
         // Log the move
         val moveDescription = when {
-            isDateChange && moveRequest.insertAfter != null -> "moved to ${targetContext} after another task"
-            isDateChange && moveRequest.insertBefore != null -> "moved to ${targetContext} before another task"
-            isDateChange && moveRequest.moveToTop -> "moved to top of ${targetContext}"
-            isDateChange && moveRequest.moveToBottom -> "moved to bottom of ${targetContext}"
-            isDateChange -> "moved to ${targetContext}"
+            finalIsOverdueContext -> "reordered in overdue context"
+            moveRequest.insertAfter != null -> "reordered after another task"
+            moveRequest.insertBefore != null -> "reordered before another task"
+            moveRequest.moveToTop -> "moved to top"
+            moveRequest.moveToBottom -> "moved to bottom"
             else -> "reordered in ${currentContext}"
         }
         println("📍 TASK ${moveDescription.uppercase()}${userEmail?.let { " by $it" } ?: ""} - '${task.title}' at position $newPosition")
@@ -522,12 +580,10 @@ class TaskService(
                 moveRequest.insertBefore != null -> "insert_before"
                 moveRequest.moveToTop -> "move_to_top"
                 moveRequest.moveToBottom -> "move_to_bottom"
-                isDateChange -> "date_change"
                 else -> "position_only"
             },
-            "date_changed" to isDateChange,
-            "from_context" to currentContext,
-            "to_context" to targetContext,
+            "is_overdue_context" to finalIsOverdueContext,
+            "context" to if (finalIsOverdueContext) "overdue" else currentContext,
             "new_position" to newPosition
         ))
         
@@ -748,7 +804,35 @@ class TaskService(
         
         // For today view: return ALL tasks due today (completed or not) + incomplete overdue
         // This lets the UI decide how to display completed vs incomplete tasks
-        val page = taskRepository.findAllTodayViewTasks(userId, todayDateStr, todayStart, todayEnd, pageable)
+        var page = taskRepository.findAllTodayViewTasks(userId, todayDateStr, todayStart, todayEnd, pageable)
+        
+        // Assign positions to newly overdue tasks (incremental positioning)
+        assignOverduePositions(page.content, todayDateStr)
+        
+        // Re-fetch the tasks to get updated overduePosition values
+        // This is necessary because assignOverduePositions saves to DB but doesn't update the in-memory list
+        page = taskRepository.findAllTodayViewTasks(userId, todayDateStr, todayStart, todayEnd, pageable)
+        
+        // Sort tasks: overdue tasks by overduePosition, today's tasks by position
+        val sortedTasks = page.content.sortedWith { task1, task2 ->
+            val isOverdue1 = task1.isOverdue(todayDateStr)
+            val isOverdue2 = task2.isOverdue(todayDateStr)
+            
+            when {
+                // Both are overdue: sort by overduePosition
+                isOverdue1 && isOverdue2 -> {
+                    val pos1 = task1.overduePosition ?: Int.MAX_VALUE
+                    val pos2 = task2.overduePosition ?: Int.MAX_VALUE
+                    println("🔍 SORTING OVERDUE: '${task1.title}' (pos=$pos1) vs '${task2.title}' (pos=$pos2) -> ${pos1.compareTo(pos2)}")
+                    pos1.compareTo(pos2)
+                }
+                // Both are today's tasks: sort by position
+                !isOverdue1 && !isOverdue2 -> task1.position.compareTo(task2.position)
+                // Mixed: overdue tasks come first
+                isOverdue1 -> -1
+                else -> 1
+            }
+        }
         
         // Track today view usage
         analyticsService.trackWorkflowEvent("today_view", mapOf(
@@ -768,7 +852,7 @@ class TaskService(
         }
         
         return TaskListResponse(
-            tasks = page.content.map { TaskResponse.from(it) },
+            tasks = sortedTasks.map { TaskResponse.from(it) },
             total = page.totalElements,
             page = pageable.pageNumber,
             size = pageable.pageSize
@@ -815,6 +899,105 @@ class TaskService(
             "view" to view,
             "timestamp" to Instant.now()
         ))
+    }
+    
+    /**
+     * Assign positions to newly overdue tasks (incremental positioning)
+     * Only tasks that are overdue and don't have an overduePosition get one
+     */
+    private fun assignOverduePositions(tasks: List<Task>, todayDateStr: String) {
+        // Separate overdue tasks into positioned and unpositioned
+        val overdueTasks = tasks.filter { it.isOverdue(todayDateStr) }
+        val (positioned, unpositioned) = overdueTasks.partition { it.overduePosition != null }
+        
+        if (unpositioned.isNotEmpty()) {
+            // Find the maximum position among already positioned overdue tasks
+            val maxPosition = positioned.maxOfOrNull { it.overduePosition!! } ?: 0
+            
+            // Assign positions to newly overdue tasks, appending to the end
+            // Group by priority for better organization
+            val sortedUnpositioned = unpositioned.sortedWith(
+                compareBy(
+                    { -it.priority.ordinal },  // HIGH first, LOW last
+                    { it.dueBy?.date },        // Then by original due date
+                    { it.position }            // Then by original position
+                )
+            )
+            
+            sortedUnpositioned.forEachIndexed { index, task ->
+                val newPosition = maxPosition + ((index + 1) * 1000)
+                val updatedTask = task.copy(
+                    overduePosition = newPosition,
+                    updatedAt = Instant.now()
+                )
+                taskRepository.save(updatedTask)
+                
+                // Log the positioning
+                println("📍 OVERDUE POSITION ASSIGNED - '${task.title}' at position $newPosition")
+            }
+        }
+    }
+    
+    /**
+     * Calculate position after a task in overdue context
+     */
+    private fun calculateOverduePositionAfter(afterTask: Task, userId: String): Int {
+        val afterPosition = afterTask.overduePosition ?: 0
+        val todayDateStr = java.time.LocalDate.now().toString()
+        // Find next overdue task
+        val allOverdue = taskRepository.findByUserIdAndCompletedOrderByPositionAsc(userId, false)
+            .filter { it.isOverdue(todayDateStr) && it.overduePosition != null }
+            .sortedBy { it.overduePosition }
+        
+        val nextTask = allOverdue.firstOrNull { (it.overduePosition ?: 0) > afterPosition }
+        
+        return if (nextTask != null) {
+            val nextPosition = nextTask.overduePosition ?: (afterPosition + 2000)
+            (afterPosition + nextPosition) / 2
+        } else {
+            afterPosition + 1000
+        }
+    }
+    
+    /**
+     * Calculate position before a task in overdue context
+     */
+    private fun calculateOverduePositionBefore(beforeTask: Task, userId: String): Int {
+        val beforePosition = beforeTask.overduePosition ?: 0
+        val todayDateStr = java.time.LocalDate.now().toString()
+        // Find previous overdue task
+        val allOverdue = taskRepository.findByUserIdAndCompletedOrderByPositionAsc(userId, false)
+            .filter { it.isOverdue(todayDateStr) && it.overduePosition != null }
+            .sortedBy { it.overduePosition }
+        
+        val prevTask = allOverdue.lastOrNull { (it.overduePosition ?: 0) < beforePosition }
+        
+        return if (prevTask != null) {
+            val prevPosition = prevTask.overduePosition ?: (beforePosition - 2000)
+            (prevPosition + beforePosition) / 2
+        } else {
+            beforePosition - 1000
+        }
+    }
+    
+    /**
+     * Get minimum overdue position for a user
+     */
+    private fun getMinOverduePosition(userId: String): Int {
+        val todayDateStr = java.time.LocalDate.now().toString()
+        return taskRepository.findByUserIdAndCompletedOrderByPositionAsc(userId, false)
+            .filter { it.isOverdue(todayDateStr) && it.overduePosition != null }
+            .minOfOrNull { it.overduePosition!! } ?: 1000
+    }
+    
+    /**
+     * Get maximum overdue position for a user
+     */
+    private fun getMaxOverduePosition(userId: String): Int {
+        val todayDateStr = java.time.LocalDate.now().toString()
+        return taskRepository.findByUserIdAndCompletedOrderByPositionAsc(userId, false)
+            .filter { it.isOverdue(todayDateStr) && it.overduePosition != null }
+            .maxOfOrNull { it.overduePosition!! } ?: 0
     }
     
     private fun findNextTaskInContext(userId: String, context: String, afterPosition: Int): Task? {

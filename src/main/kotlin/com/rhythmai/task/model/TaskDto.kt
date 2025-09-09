@@ -131,6 +131,14 @@ data class TaskResponse(
             // Auto-migrate legacy fields to new format if needed
             val migratedTask = task.migrateCompletionFields()
             
+            // For overdue tasks, use overduePosition as the position field
+            // This allows the frontend to use the position field consistently
+            val effectivePosition = if (migratedTask.isOverdue()) {
+                migratedTask.overduePosition ?: migratedTask.position
+            } else {
+                migratedTask.position
+            }
+            
             return TaskResponse(
                 id = migratedTask.id!!,
                 title = migratedTask.title,
@@ -140,7 +148,7 @@ data class TaskResponse(
                 priority = migratedTask.priority,
                 dueBy = migratedTask.dueBy?.let { DueByResponse.from(it) },
                 tags = migratedTask.tags,
-                position = migratedTask.position,
+                position = effectivePosition,
                 createdAt = migratedTask.createdAt,
                 updatedAt = migratedTask.updatedAt,
                 completedOn = migratedTask.completedOn?.let { CompletedOnResponse.from(it) },
@@ -166,7 +174,7 @@ data class MoveTaskRequest(
     val insertBefore: String? = null,   // Task ID to position before
     val moveToTop: Boolean = false,     // Move to top of context
     val moveToBottom: Boolean = false,  // Move to bottom of context
-    val targetDate: DueByRequest? = null  // Optional target date for cross-date moves
+    val context: String? = null  // Optional context: "overdue", "today", "date", null (default)
 ) {
     init {
         // Validate that only one positioning strategy is specified
@@ -177,14 +185,13 @@ data class MoveTaskRequest(
             if (moveToBottom) "moveToBottom" else null
         )
         
-        // Allow no positioning strategy when targetDate is provided (will append to end)
         require(strategies.size <= 1) {
             "At most one positioning strategy can be specified (got: ${strategies.joinToString(", ")})"
         }
         
-        // If no positioning strategy and no targetDate, it's a no-op
-        if (strategies.isEmpty() && targetDate == null) {
-            require(false) { "Either a positioning strategy or targetDate must be specified" }
+        // At least one positioning strategy must be specified
+        require(strategies.isNotEmpty()) {
+            "A positioning strategy must be specified (insertAfter, insertBefore, moveToTop, or moveToBottom)"
         }
     }
 }

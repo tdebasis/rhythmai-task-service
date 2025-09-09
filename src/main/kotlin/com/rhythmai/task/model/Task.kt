@@ -32,6 +32,9 @@ data class Task(
     val createdAt: Instant = Instant.now(),
     val updatedAt: Instant = Instant.now(),
     
+    // Overdue positioning - for maintaining order of overdue tasks
+    val overduePosition: Int? = null,  // Position when task is in overdue context
+    
     // Completion information - Complex type encapsulating all completion temporal information
     val completedOn: CompletedOn? = null,  // Null if not completed, contains date/time when completed
     
@@ -89,6 +92,15 @@ data class Task(
         } else {
             this // Already migrated or not completed
         }
+    }
+    
+    /**
+     * Check if task is overdue (past due date and not completed)
+     */
+    fun isOverdue(currentDate: String = java.time.LocalDate.now().toString()): Boolean {
+        if (completed) return false
+        val taskDate = dueBy?.date ?: return false
+        return taskDate < currentDate
     }
 }
 
