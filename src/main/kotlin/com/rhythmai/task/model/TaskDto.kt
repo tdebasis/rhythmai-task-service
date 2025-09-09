@@ -119,40 +119,32 @@ data class TaskResponse(
     val createdAt: Instant,
     val updatedAt: Instant,
     
-    // New completion format
-    val completedOn: CompletedOnResponse?,
-    
-    // Legacy fields for backward compatibility
-    @Deprecated("Use completedOn instead")
-    val completedAt: Instant?
+    // Completion format
+    val completedOn: CompletedOnResponse?
 ) {
     companion object {
         fun from(task: Task): TaskResponse {
-            // Auto-migrate legacy fields to new format if needed
-            val migratedTask = task.migrateCompletionFields()
-            
             // For overdue tasks, use overduePosition as the position field
             // This allows the frontend to use the position field consistently
-            val effectivePosition = if (migratedTask.isOverdue()) {
-                migratedTask.overduePosition ?: migratedTask.position
+            val effectivePosition = if (task.isOverdue()) {
+                task.overduePosition ?: task.position
             } else {
-                migratedTask.position
+                task.position
             }
             
             return TaskResponse(
-                id = migratedTask.id!!,
-                title = migratedTask.title,
-                description = migratedTask.description,
-                projectId = migratedTask.projectId,
-                completed = migratedTask.completed,
-                priority = migratedTask.priority,
-                dueBy = migratedTask.dueBy?.let { DueByResponse.from(it) },
-                tags = migratedTask.tags,
+                id = task.id!!,
+                title = task.title,
+                description = task.description,
+                projectId = task.projectId,
+                completed = task.completed,
+                priority = task.priority,
+                dueBy = task.dueBy?.let { DueByResponse.from(it) },
+                tags = task.tags,
                 position = effectivePosition,
-                createdAt = migratedTask.createdAt,
-                updatedAt = migratedTask.updatedAt,
-                completedOn = migratedTask.completedOn?.let { CompletedOnResponse.from(it) },
-                completedAt = migratedTask.getEffectiveCompletedTime()  // Backward compatibility
+                createdAt = task.createdAt,
+                updatedAt = task.updatedAt,
+                completedOn = task.completedOn?.let { CompletedOnResponse.from(it) }
             )
         }
     }

@@ -146,15 +146,23 @@ class TaskService(
         )
     }
     
-    fun getTasksByCompleted(userId: String, completed: Boolean, pageable: Pageable): TaskListResponse {
-        val page = taskRepository.findByUserIdAndCompletedOrderByPositionAsc(userId, completed, pageable)
+    fun getTasksByCompleted(userId: String, completed: Boolean, pageable: Pageable, userTimezone: String = "UTC"): TaskListResponse {
+        val page = if (completed) {
+            // For completed tasks, show only tasks completed today
+            val todayDateStr = getTodayDateString(userTimezone)
+            taskRepository.findTasksCompletedToday(userId, todayDateStr, pageable)
+        } else {
+            // For incomplete tasks, show all incomplete tasks
+            taskRepository.findByUserIdAndCompletedOrderByPositionAsc(userId, false, pageable)
+        }
         
         // Track filter usage
         analyticsService.trackWorkflowEvent("filter_applied", mapOf(
             "filter_type" to "completion_status",
             "filter_value" to completed,
             "results_count" to page.totalElements,
-            "page_requested" to pageable.pageNumber
+            "page_requested" to pageable.pageNumber,
+            "filter_context" to if (completed) "today_only" else "all"
         ))
         
         return TaskListResponse(
@@ -1017,12 +1025,17 @@ class TaskService(
     }
     
     private fun countTodayCompletions(userId: String): Long {
-        val todayStart = java.time.LocalDate.now()
-            .atStartOfDay()
-            .toInstant(java.time.ZoneOffset.UTC)
-        val todayEnd = todayStart.plus(java.time.Duration.ofDays(1))
-        
-        return taskRepository.findByUserIdAndCompletedTrueAndCompletedAtBetween(userId, todayStart, todayEnd).size.toLong()
+        val todayDateStr = getTodayDateString("UTC")
+        return taskRepository.countByUserIdAndCompletedTrueAndCompletedOnDateEquals(userId, todayDateStr)
+    }
+    
+    private fun getTodayDateString(timezone: String): String {
+        val zoneId = try {
+            java.time.ZoneId.of(timezone)
+        } catch (e: Exception) {
+            java.time.ZoneId.of("UTC")
+        }
+        return java.time.LocalDate.now(zoneId).toString()
     }
 }
 

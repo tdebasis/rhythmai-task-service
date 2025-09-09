@@ -36,64 +36,8 @@ data class Task(
     val overduePosition: Int? = null,  // Position when task is in overdue context
     
     // Completion information - Complex type encapsulating all completion temporal information
-    val completedOn: CompletedOn? = null,  // Null if not completed, contains date/time when completed
-    
-    // Legacy fields for backward compatibility (will be migrated to completedOn)
-    @Deprecated("Use completedOn instead")
-    val completedAt: Instant? = null,
-    @Deprecated("Use completedOn instead")
-    val completedDate: String? = null
+    val completedOn: CompletedOn? = null  // Null if not completed, contains date/time when completed
 ) {
-    /**
-     * Get the effective completion timestamp, preferring completedOn over legacy fields
-     */
-    fun getEffectiveCompletedTime(): Instant? {
-        return completedOn?.time ?: completedAt
-    }
-    
-    /**
-     * Get the effective completion date, preferring completedOn over legacy fields
-     */
-    fun getEffectiveCompletedDate(): String? {
-        return completedOn?.date ?: completedDate
-    }
-    
-    /**
-     * Migrate legacy fields to new CompletedOn structure
-     */
-    fun migrateCompletionFields(): Task {
-        return if (completedOn == null && (completedAt != null || completedDate != null)) {
-            // Migrate from legacy fields
-            val migratedCompletedOn = when {
-                completedAt != null && completedDate != null -> {
-                    CompletedOn(
-                        date = completedDate,
-                        time = completedAt,
-                        timeType = TimeType.FIXED
-                    )
-                }
-                completedAt != null -> {
-                    // Only have timestamp, derive date in UTC
-                    val utcDate = java.time.LocalDate.ofInstant(completedAt, java.time.ZoneOffset.UTC).toString()
-                    CompletedOn(
-                        date = utcDate,
-                        time = completedAt,
-                        timeType = TimeType.FIXED
-                    )
-                }
-                else -> null
-            }
-            
-            this.copy(
-                completedOn = migratedCompletedOn,
-                completedAt = null,
-                completedDate = null
-            )
-        } else {
-            this // Already migrated or not completed
-        }
-    }
-    
     /**
      * Check if task is overdue (past due date and not completed)
      */

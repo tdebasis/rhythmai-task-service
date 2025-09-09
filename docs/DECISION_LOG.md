@@ -515,7 +515,7 @@ GET /api/tasks                    // All incomplete tasks (default)
 GET /api/tasks?view=inbox         // Inbox view (no date, no project)
 GET /api/tasks?view=today         // Today + overdue tasks
 GET /api/tasks?view=upcoming      // Future tasks (tomorrow+)
-GET /api/tasks?completed=true     // All completed tasks
+GET /api/tasks?completed=true     // Tasks completed TODAY only (not all completed)
 
 // Context tracking for creation
 POST /api/tasks?context=inbox     // Track where task was created
@@ -1029,3 +1029,55 @@ TaskResponse.from(task): TaskResponse {
 - [Repository Interface](src/main/kotlin/com/rhythmai/task/repository/TaskRepository.kt)
 - [Main CLAUDE.md](CLAUDE.md)
 - [Architecture Docs](../rhythmai-docs/architecture/architecture.md)
+
+---
+
+## Decision 18: Completed Tasks Filtering - Show Today's Completions Only
+**Date**: December 9, 2025  
+**Status**: ✅ Implemented  
+
+**Decision**: Filter completed tasks to show only tasks completed today when `completed=true` is passed
+
+**Context**: 
+- Initially, `GET /api/tasks?completed=true` returned ALL completed tasks ever
+- This wasn't useful for users who want to see what they accomplished today
+- The frontend "Completed" section should show today's accomplishments
+
+**Implementation**:
+```kotlin
+// Repository method for finding today's completed tasks
+@Query("{'userId': ?0, 'completed': true, 'completedOn.date': ?1}")
+fun findTasksCompletedToday(
+    userId: String,
+    todayDateStr: String,  // "2025-09-09" format
+    pageable: Pageable
+): Page<Task>
+
+// Service filters by today when completed=true
+if (completed) {
+    val todayDateStr = getTodayDateString(userTimezone)
+    taskRepository.findTasksCompletedToday(userId, todayDateStr, pageable)
+}
+```
+
+**Key Design Decisions**:
+1. **Uses CompletedOn.date field**: Filters by the date string field (e.g., "2025-09-09")
+2. **Timezone-aware**: Uses X-User-Timezone header to determine "today"
+3. **Today view unchanged**: The Today view still includes all tasks completed today as part of its comprehensive view
+4. **No legacy support**: Removed all deprecated `completedAt` and `completedDate` fields since not in production
+
+**API Behavior**:
+- `GET /api/tasks?completed=true` → Only tasks where `completedOn.date` equals today
+- `GET /api/tasks?view=today` → Includes completed today + due today + overdue
+- `GET /api/tasks?completed=false` → All incomplete tasks (unchanged)
+
+**Rationale**:
+- Users want to see their daily accomplishments in the completed section
+- Aligns with productivity apps that focus on "what did I accomplish today?"
+- Keeps the completed section relevant and not cluttered with old completions
+- Today view remains comprehensive for full daily overview
+
+**Future Considerations**:
+- May want to add date range filtering for completed tasks (e.g., `completedFrom` and `completedTo` parameters)
+- Could add a `view=completed-all` to see all completed tasks if needed
+- Consider analytics dashboard showing completion trends over time

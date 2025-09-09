@@ -79,11 +79,12 @@ interface TaskRepository : MongoRepository<Task, String> {
     fun countByUserIdAndCompleted(userId: String, completed: Boolean): Long
     
     // Analytics support - completion tracking
-    fun findByUserIdAndCompletedTrueAndCompletedAtBetween(
-        userId: String, 
-        start: Instant, 
-        end: Instant
-    ): List<Task>
+    // Removed - uses deprecated completedAt field
+    // fun findByUserIdAndCompletedTrueAndCompletedAtBetween(
+    //     userId: String, 
+    //     start: Instant, 
+    //     end: Instant
+    // ): List<Task>
     
     // View-based filtering methods
     
@@ -95,11 +96,9 @@ interface TaskRepository : MongoRepository<Task, String> {
     ): Page<Task>
     
     // Inbox with today's completed: (no date + no project) OR (completed today)
-    // Supports both new completedOn.date and legacy completedDate fields
     @Query("{'userId': ?0, '\$or': [" +
            "{'dueBy': null, 'projectId': null, 'completed': ?1}, " +  // Regular inbox tasks
-           "{'completedOn.date': ?2, 'completed': true}, " +  // Today's completed (new format)
-           "{'completedDate': ?2, 'completed': true}" +  // Today's completed (legacy format)
+           "{'completedOn.date': ?2, 'completed': true}" +  // Today's completed
            "]}")
     fun findInboxTasksIncludingTodayCompleted(
         userId: String,
@@ -130,8 +129,7 @@ interface TaskRepository : MongoRepository<Task, String> {
            "{'dueBy.date': {'\$lt': ?1}, 'dueBy.time': null, 'completed': false}, " +  // All-day overdue (incomplete only)
            "{'dueBy.time': {'\$gte': ?2, '\$lt': ?3}}, " +  // Time-specific tasks due today
            "{'dueBy.time': {'\$lt': ?2}, 'completed': false}, " +  // Time-specific overdue (incomplete only)
-           "{'completedOn.date': ?1, 'completed': true}, " +  // Tasks completed today (new format)
-           "{'completedDate': ?1, 'completed': true}" +  // Tasks completed today (legacy format)
+           "{'completedOn.date': ?1, 'completed': true}" +  // Tasks completed today
            "]}")
     fun findAllTodayViewTasks(
         userId: String,
@@ -157,22 +155,19 @@ interface TaskRepository : MongoRepository<Task, String> {
     // Count for analytics
     fun countByUserId(userId: String): Long
     
-    // Count completed today - supports both new and legacy formats
-    @Query(value = "{'userId': ?0, 'completed': true, '\$or': [" +
-           "{'completedOn.date': ?1}, " +  // New format
-           "{'completedDate': ?1}" +  // Legacy format
-           "]}", count = true)
+    // Find tasks completed today
+    @Query("{'userId': ?0, 'completed': true, 'completedOn.date': ?1}")
+    fun findTasksCompletedToday(
+        userId: String,
+        todayDateStr: String,
+        pageable: Pageable
+    ): Page<Task>
+    
+    // Count completed today
+    @Query(value = "{'userId': ?0, 'completed': true, 'completedOn.date': ?1}", count = true)
     fun countByUserIdAndCompletedTrueAndCompletedOnDateEquals(
         userId: String,
         dateStr: String
-    ): Long
-    
-    // Legacy method for backward compatibility
-    @Deprecated("Use countByUserIdAndCompletedTrueAndCompletedOnDateEquals instead")
-    fun countByUserIdAndCompletedTrueAndCompletedAtBetween(
-        userId: String,
-        start: Instant,
-        end: Instant
     ): Long
     
     // Updated search and filter methods with completed parameter

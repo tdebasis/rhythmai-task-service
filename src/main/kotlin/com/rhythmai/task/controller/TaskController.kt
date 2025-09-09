@@ -230,7 +230,7 @@ class TaskController(
                     }
                     else -> {
                         // Default: all tasks with completed filter (defaults to false)
-                        val taskList = taskService.getTasksByCompleted(userContext.userId, completed, pageable)
+                        val taskList = taskService.getTasksByCompleted(userContext.userId, completed, pageable, timezone)
                         ResponseEntity.ok(taskList)
                     }
                 }

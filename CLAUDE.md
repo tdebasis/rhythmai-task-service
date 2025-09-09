@@ -317,11 +317,19 @@ PATCH /api/tasks/{id}/move  # With optional targetDate for cross-date moves
 2. **Timezone**: Send X-User-Timezone for accurate "today" boundaries  
 3. **Analytics**: Use context parameter for tracking user workflows
 4. **Default Filters**: completed=false is default for active task views
-5. **Error Handling**: 400 for invalid views, 401 for missing auth
+5. **Completed Section**: `GET /api/tasks?completed=true` returns ONLY tasks completed today (not all completed tasks)
+6. **Error Handling**: 400 for invalid views, 401 for missing auth
 
 ### 📊 **Recent Updates (December 2025):**
 
-#### Cross-Date Task Movement (NEW)
+#### Completed Tasks Filtering (December 9, 2025)
+- **Changed Behavior**: `GET /api/tasks?completed=true` now returns only tasks completed TODAY
+- **Previous**: Returned all completed tasks ever (not useful for daily view)
+- **Rationale**: Shows daily accomplishments in the completed section
+- **Implementation**: Filters by `completedOn.date` matching today's date
+- **Legacy Cleanup**: Removed all deprecated `completedAt` and `completedDate` fields
+
+#### Cross-Date Task Movement (December 8, 2025)
 - **Enhanced Move API**: `PATCH /api/tasks/{id}/move` now accepts optional `targetDate` field
 - **Atomic Updates**: Changes both date and position in single operation
 - **Smart Validation**: Ensures reference tasks (insertAfter/insertBefore) are in target date context
