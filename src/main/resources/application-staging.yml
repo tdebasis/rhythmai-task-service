@@ -1,8 +1,8 @@
 spring:
   data:
     mongodb:
-      uri: ${MONGODB_URI:mongodb://localhost:27017/rhythmai-tasks-staging}
+      uri: ${MONGODB_URI:mongodb://localhost:27017/havq-tasks-staging}
 
 logging:
   level:
-    com.rhythmai.task: INFO
+    com.havq.task: INFO

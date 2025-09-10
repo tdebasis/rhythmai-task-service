@@ -7,17 +7,17 @@
  * WARNING: This will lose timezone and time type information!
  * 
  * Usage:
- * mongosh rhythmai-tasks-local scripts/rollback-hybrid-dates.js
+ * mongosh havq-tasks-local scripts/rollback-hybrid-dates.js
  */
 
 // Switch to the correct database
-use('rhythmai-tasks-local');
+use('havq-tasks-local');
 
 print("Starting rollback from hybrid date model...");
 print("WARNING: This will lose timezone and time type information!");
 
 // Count tasks to rollback
-const tasksToRollback = db['rhythmai-tasks'].countDocuments({ 
+const tasksToRollback = db['havq-tasks'].countDocuments({ 
     dueByDate: { $exists: true }
 });
 
@@ -33,7 +33,7 @@ print("\nPress Ctrl+C within 5 seconds to cancel...");
 sleep(5000);
 
 // Perform the rollback
-const result = db['rhythmai-tasks'].updateMany(
+const result = db['havq-tasks'].updateMany(
     { dueByDate: { $exists: true } },
     [
         {
@@ -59,7 +59,7 @@ print(`Rollback updated: ${result.modifiedCount} tasks`);
 
 // Remove hybrid date fields
 print("Removing hybrid date fields...");
-const cleanupResult = db['rhythmai-tasks'].updateMany(
+const cleanupResult = db['havq-tasks'].updateMany(
     { dueByDate: { $exists: true } },
     { 
         $unset: { 
@@ -74,7 +74,7 @@ const cleanupResult = db['rhythmai-tasks'].updateMany(
 print(`Cleanup completed: ${cleanupResult.modifiedCount} tasks cleaned`);
 
 // Verify rollback
-const sampleTask = db['rhythmai-tasks'].findOne({ dueDate: { $exists: true } });
+const sampleTask = db['havq-tasks'].findOne({ dueDate: { $exists: true } });
 if (sampleTask) {
     print("\nSample rolled-back task:");
     print(`  Title: ${sampleTask.title}`);
@@ -82,11 +82,11 @@ if (sampleTask) {
 }
 
 // Final verification
-const remainingHybridTasks = db['rhythmai-tasks'].countDocuments({ 
+const remainingHybridTasks = db['havq-tasks'].countDocuments({ 
     dueByDate: { $exists: true }
 });
 
-const rolledBackTasks = db['rhythmai-tasks'].countDocuments({ 
+const rolledBackTasks = db['havq-tasks'].countDocuments({ 
     dueDate: { $exists: true }
 });
 
@@ -103,9 +103,9 @@ if (remainingHybridTasks > 0) {
 // Drop indexes on hybrid fields
 print("\nDropping indexes on hybrid date fields...");
 try {
-    db['rhythmai-tasks'].dropIndex({ "userId": 1, "dueByDate": 1 });
-    db['rhythmai-tasks'].dropIndex({ "userId": 1, "dueByTime": 1 });
-    db['rhythmai-tasks'].dropIndex({ "userId": 1, "timeType": 1 });
+    db['havq-tasks'].dropIndex({ "userId": 1, "dueByDate": 1 });
+    db['havq-tasks'].dropIndex({ "userId": 1, "dueByTime": 1 });
+    db['havq-tasks'].dropIndex({ "userId": 1, "timeType": 1 });
     print("Indexes dropped successfully!");
 } catch (e) {
     print("Note: Some indexes may not exist, which is fine.");

@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# Rhythmai Task Service - Start Script
+# Havq Task Service - Start Script
 # Usage: ./start.sh [profile]
 # Profiles: local (default), staging, prod
 
 set -e
 
 PROFILE=${1:-local}
-SERVICE_NAME="rhythmai-task-service"
+SERVICE_NAME="havq-task-service"
 LOG_DIR="logs"
 PID_FILE="$SERVICE_NAME.pid"
 
@@ -18,7 +18,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}🚀 Starting Rhythmai Task Service${NC}"
+echo -e "${BLUE}🚀 Starting Havq Task Service${NC}"
 echo -e "${BLUE}Profile: ${PROFILE}${NC}"
 echo -e "${BLUE}Port: 5002${NC}"
 

@@ -1,1 +1,1 @@
-rootProject.name = "rhythmai-task-service"
+rootProject.name = "havq-task-service"

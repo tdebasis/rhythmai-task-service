@@ -5,5 +5,5 @@ spring:
 
 logging:
   level:
-    com.rhythmai.task: WARN
+    com.havq.task: WARN
     org.springframework.data.mongodb: WARN

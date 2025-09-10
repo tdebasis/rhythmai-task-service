@@ -5,16 +5,16 @@
  * to the new hybrid date model with dueByDate, dueByTime, dueTimezone, and timeType.
  * 
  * Usage:
- * mongosh rhythmai-tasks-local scripts/migrate-hybrid-dates.js
+ * mongosh havq-tasks-local scripts/migrate-hybrid-dates.js
  */
 
 // Switch to the correct database
-use('rhythmai-tasks-local');
+use('havq-tasks-local');
 
 print("Starting migration to hybrid date model...");
 
 // Count existing tasks that need migration
-const tasksToMigrate = db['rhythmai-tasks'].countDocuments({ 
+const tasksToMigrate = db['havq-tasks'].countDocuments({ 
     dueDate: { $exists: true },
     dueByDate: { $exists: false }
 });
@@ -27,7 +27,7 @@ if (tasksToMigrate === 0) {
 }
 
 // Perform the migration
-const result = db['rhythmai-tasks'].updateMany(
+const result = db['havq-tasks'].updateMany(
     { 
         dueDate: { $exists: true },
         dueByDate: { $exists: false }
@@ -58,7 +58,7 @@ print(`Migration completed: ${result.modifiedCount} tasks updated`);
 
 // Remove old dueDate field after migration
 print("Removing old dueDate field...");
-const cleanupResult = db['rhythmai-tasks'].updateMany(
+const cleanupResult = db['havq-tasks'].updateMany(
     { dueDate: { $exists: true } },
     { $unset: { dueDate: "" } }
 );
@@ -66,7 +66,7 @@ const cleanupResult = db['rhythmai-tasks'].updateMany(
 print(`Cleanup completed: ${cleanupResult.modifiedCount} tasks cleaned`);
 
 // Verify migration
-const sampleTask = db['rhythmai-tasks'].findOne({ dueByDate: { $exists: true } });
+const sampleTask = db['havq-tasks'].findOne({ dueByDate: { $exists: true } });
 if (sampleTask) {
     print("\nSample migrated task:");
     print(`  Title: ${sampleTask.title}`);
@@ -77,11 +77,11 @@ if (sampleTask) {
 }
 
 // Final verification
-const remainingOldTasks = db['rhythmai-tasks'].countDocuments({ 
+const remainingOldTasks = db['havq-tasks'].countDocuments({ 
     dueDate: { $exists: true }
 });
 
-const migratedTasks = db['rhythmai-tasks'].countDocuments({ 
+const migratedTasks = db['havq-tasks'].countDocuments({ 
     dueByDate: { $exists: true }
 });
 
@@ -97,9 +97,9 @@ if (remainingOldTasks > 0) {
 
 // Create index on new fields for query performance
 print("\nCreating indexes on new date fields...");
-db['rhythmai-tasks'].createIndex({ "userId": 1, "dueByDate": 1 });
-db['rhythmai-tasks'].createIndex({ "userId": 1, "dueByTime": 1 });
-db['rhythmai-tasks'].createIndex({ "userId": 1, "timeType": 1 });
+db['havq-tasks'].createIndex({ "userId": 1, "dueByDate": 1 });
+db['havq-tasks'].createIndex({ "userId": 1, "dueByTime": 1 });
+db['havq-tasks'].createIndex({ "userId": 1, "timeType": 1 });
 
 print("Indexes created successfully!");
 print("\nMigration script completed.");

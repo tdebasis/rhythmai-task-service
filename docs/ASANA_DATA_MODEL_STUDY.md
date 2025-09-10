@@ -367,7 +367,7 @@ data class Task(
 
 Asana's data model reflects its **enterprise project management focus**. The mutual exclusivity pattern ensures data consistency and clarity, while native date range support enables sophisticated timeline and resource planning features.
 
-The trade-off is increased API complexity and field proliferation. For a personal task manager like Rhythmai, a hybrid approach combining Todoist's flexibility with Asana's range support might offer the best balance.
+The trade-off is increased API complexity and field proliferation. For a personal task manager like Havq, a hybrid approach combining Todoist's flexibility with Asana's range support might offer the best balance.
 
 Key insights:
 1. **Mutual exclusivity** prevents ambiguity but limits flexibility

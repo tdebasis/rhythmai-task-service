@@ -2,7 +2,7 @@
 
 **Created**: September 4, 2025  
 **Last Updated**: September 4, 2025  
-**Purpose**: Document all architectural and design decisions for the Rhythmai Task Service
+**Purpose**: Document all architectural and design decisions for the Havq Task Service
 
 ---
 
@@ -222,7 +222,7 @@ PATCH  /api/tasks/{id}/incomplete  # Mark incomplete
 1. **Method names become queries**: `findByUserIdOrderByCreatedAtDesc`
 2. **Custom queries via @Query**: Complex searches with regex
 3. **Auto-implementation**: Spring generates implementation at runtime
-4. **Collection name**: `rhythmai-tasks`
+4. **Collection name**: `havq-tasks`
 
 **Query Logging**:
 ```yaml
@@ -638,7 +638,7 @@ GET /api/tasks:
 **Context**: After analyzing Todoist and Asana data models, we discovered two approaches to timezone handling:
 - **Todoist**: Supports both floating (default) and fixed time, optimized for personal productivity
 - **Asana**: Fixed time only, optimized for team collaboration
-- **Rhythmai Use Case**: Personal productivity with occasional collaboration (projects with assignees)
+- **Havq Use Case**: Personal productivity with occasional collaboration (projects with assignees)
 
 **Implementation Strategy**:
 
@@ -1025,10 +1025,10 @@ TaskResponse.from(task): TaskResponse {
 ---
 
 ## References
-- [Task Model Code](src/main/kotlin/com/rhythmai/task/model/Task.kt)
-- [Repository Interface](src/main/kotlin/com/rhythmai/task/repository/TaskRepository.kt)
+- [Task Model Code](src/main/kotlin/com/havq/task/model/Task.kt)
+- [Repository Interface](src/main/kotlin/com/havq/task/repository/TaskRepository.kt)
 - [Main CLAUDE.md](CLAUDE.md)
-- [Architecture Docs](../rhythmai-docs/architecture/architecture.md)
+- [Architecture Docs](../havq-docs/architecture/architecture.md)
 
 ---
 

@@ -3,16 +3,16 @@ server:
 
 spring:
   application:
-    name: rhythmai-task-service
+    name: havq-task-service
   profiles:
     active: local
   data:
     mongodb:
-      uri: ${MONGODB_URI:mongodb://localhost:27017/rhythmai-tasks-local}
+      uri: ${MONGODB_URI:mongodb://localhost:27017/havq-tasks-local}
 
 logging:
   level:
-    com.rhythmai.task: INFO
+    com.havq.task: INFO
     org.springframework.data.mongodb: DEBUG
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"

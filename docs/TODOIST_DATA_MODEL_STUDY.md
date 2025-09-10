@@ -338,4 +338,4 @@ Todoist's data model demonstrates sophisticated thinking about task management s
 
 The key insight is treating tasks as **deadline-focused entities** rather than time-blocked events, while providing the flexibility to add timing precision when needed. This creates a natural progression from simple date-based task management to complex time-aware productivity workflows.
 
-For our Rhythmai task service, adopting similar patterns would provide both immediate simplicity and long-term flexibility, supporting users from basic task capture through advanced calendar integration and time-blocking workflows.
+For our Havq task service, adopting similar patterns would provide both immediate simplicity and long-term flexibility, supporting users from basic task capture through advanced calendar integration and time-blocking workflows.

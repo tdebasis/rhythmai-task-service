@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# Rhythmai Task Service - Status Script
+# Havq Task Service - Status Script
 
 set -e
 
-SERVICE_NAME="rhythmai-task-service"
+SERVICE_NAME="havq-task-service"
 PID_FILE="$SERVICE_NAME.pid"
 LOG_DIR="logs"
 
@@ -17,7 +17,7 @@ PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}📊 Rhythmai Task Service Status${NC}"
+echo -e "${BLUE}📊 Havq Task Service Status${NC}"
 echo -e "${BLUE}================================${NC}"
 
 # Check PID file
@@ -84,7 +84,7 @@ else
     echo -e "${RED}Service Status: ${NC}❌ NOT RUNNING"
     
     # Check if any related processes are running
-    RUNNING_PROCESSES=$(pgrep -f "rhythmai-task-service" || true)
+    RUNNING_PROCESSES=$(pgrep -f "havq-task-service" || true)
     if [ -n "$RUNNING_PROCESSES" ]; then
         echo -e "${YELLOW}Warning: ${NC}Found orphaned processes: $RUNNING_PROCESSES"
         echo -e "${YELLOW}Recommendation: ${NC}Run ./stop.sh to clean up"

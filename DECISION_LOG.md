@@ -178,7 +178,7 @@ Embedded analytics directly in service layer rather than separate analytics serv
 ## November 2024 - Initial Architecture
 
 ### Context
-Building task management service as part of Rhythmai personal work management system.
+Building task management service as part of Havq personal work management system.
 
 ### Key Decisions
 

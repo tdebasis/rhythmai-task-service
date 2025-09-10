@@ -2,27 +2,35 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-**📋 For complete project context, see: `../rhythmai-docs/CLAUDE.md`**
+**📋 For complete project context, see: `../havq-docs/CLAUDE.md`**
+
+## 🔄 Recent Rebranding (December 2025)
+**Company renamed from Rhythmai to Havq**
+- All package names changed: `com.rhythmai` → `com.havq`
+- MongoDB collections: `rhythmai-tasks` → `havq-tasks`
+- Service directories: `rhythmai-*` → `havq-*`
+- Domain: `havq.ai` (not havq.work)
+- Orchestration scripts updated in `~/projects/` folder (start.sh, stop.sh, status.sh)
 
 ## Essential Documentation to Read
 
 **IMPORTANT**: Always read these documents for context before starting work:
-1. **Architecture Documentation**: `~/projects/rhythmai-docs/architecture/` - System design and technical decisions
-2. **Requirements Documentation**: `~/projects/rhythmai-docs/requirements/` - Business requirements and user stories  
+1. **Architecture Documentation**: `~/projects/havq-docs/architecture/` - System design and technical decisions
+2. **Requirements Documentation**: `~/projects/havq-docs/requirements/` - Business requirements and user stories  
 3. **Business Context**: `~/projects/flowdeck/presentations/` - Business strategy and product vision
 
 These documents provide critical context for understanding the system's purpose, design decisions, and business goals.
 
 ## This Repository
 
-- **Purpose**: Task management microservice for Rhythmai personal work management app
+- **Purpose**: Task management microservice for Havq personal work management app
 - **Tech Stack**: Spring Boot 3.2 + Kotlin 1.9 + Java 17
 - **Port**: 5002 (internal service, not exposed to browser)
 - **Status**: 🚧 Ready for implementation - currently empty repository
 
 ## Architecture Context
 
-This service is part of Rhythmai's **BFF Gateway Pattern**:
+This service is part of Havq's **BFF Gateway Pattern**:
 
 ```
 Browser → Express.js BFF (port 3000) → Task Service (port 5002)
@@ -34,8 +42,8 @@ Browser → Express.js BFF (port 3000) → Task Service (port 5002)
 
 1. **Internal Service**: This service is NOT exposed to browsers - only accessible from Express.js BFF
 2. **Authentication**: BFF handles OAuth2/JWT - this service trusts X-User-* headers from BFF
-3. **Database**: Uses MongoDB with `rhythmai-tasks` collection
-4. **Shared Library**: Uses `rhythmai-shared-kotlin` via Gradle Composite Build
+3. **Database**: Uses MongoDB with `havq-tasks` collection
+4. **Shared Library**: Uses `havq-shared-kotlin` via Gradle Composite Build
 
 ## Expected Implementation
 
@@ -53,17 +61,17 @@ Based on requirements, this service will handle:
 ### Technical Requirements:
 - **Framework**: Spring Boot 3.2.0 + Kotlin 1.9.20
 - **Build**: Gradle with Kotlin DSL
-- **Database**: MongoDB (rhythmai-tasks collection)
+- **Database**: MongoDB (havq-tasks collection)
 - **Authentication**: Trust X-User-* headers from BFF (no JWT validation needed)
 - **API**: REST endpoints under `/api/tasks`
-- **Shared Code**: Use `rhythmai-shared-kotlin` for user context utilities
+- **Shared Code**: Use `havq-shared-kotlin` for user context utilities
 
 ## Kotlin Service Structure (from Architecture Docs)
 
-This service should follow the standard Rhythmai microservice structure:
+This service should follow the standard Havq microservice structure:
 
 ```
-src/main/kotlin/com/rhythmai/task/
+src/main/kotlin/com/havq/task/
 ├── controller/     # REST API endpoints (@RestController)
 ├── service/        # Business logic
 ├── repository/     # Data access (@Repository)
@@ -82,22 +90,22 @@ src/main/kotlin/com/rhythmai/task/
 
 ## Shared Library Integration
 
-This service uses `rhythmai-shared-kotlin` for common functionality:
+This service uses `havq-shared-kotlin` for common functionality:
 
 ### Gradle Composite Build Setup:
 
 **settings.gradle.kts:**
 ```kotlin
-rootProject.name = "rhythmai-task-service"
+rootProject.name = "havq-task-service"
 
 // Composite build - automatically rebuilds shared library when needed
-includeBuild("../rhythmai-shared-kotlin")
+includeBuild("../havq-shared-kotlin")
 ```
 
 **build.gradle.kts:**
 ```kotlin
 dependencies {
-    implementation("com.rhythmai:rhythmai-shared")
+    implementation("com.havq:havq-shared")
     // Other dependencies...
 }
 ```
@@ -137,7 +145,7 @@ class TaskController(
    ```
 
 2. **Dependencies**: Spring Boot Web, MongoDB, Spring Boot Test
-3. **Composite Build**: Add `../rhythmai-shared-kotlin` to `settings.gradle.kts`
+3. **Composite Build**: Add `../havq-shared-kotlin` to `settings.gradle.kts`
 4. **Configuration**: Spring profiles (local/staging/prod) with MongoDB URIs
 5. **Controller**: REST endpoints that extract user from BFF headers
 
@@ -248,10 +256,10 @@ This discussion-first approach ensures better decision-making and helps avoid co
 
 ## Related Services
 
-- **rhythmai-frontend**: Express.js BFF + React app (port 3000)
-- **rhythmai-project-service**: Project management service (port 5003)
-- **rhythmai-shared-kotlin**: Shared utilities and models
-- **rhythmai-docs**: Central documentation and requirements
+- **havq-frontend**: Express.js BFF + React app (port 3000)
+- **havq-project-service**: Project management service (port 5003)
+- **havq-shared-kotlin**: Shared utilities and models
+- **havq-docs**: Central documentation and requirements
 
 ## Commands
 
@@ -281,7 +289,7 @@ curl http://localhost:5002/api/tasks/hello-world  # Test hello world endpoint
 ## MongoDB Collections
 
 This service manages:
-- `rhythmai-tasks`: User tasks with full task management data
+- `havq-tasks`: User tasks with full task management data
 
 User data is managed by the BFF and shared via request headers.
 

@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# Rhythmai Task Service - Stop Script
+# Havq Task Service - Stop Script
 
 # Note: Not using 'set -e' to allow script to continue even if individual commands fail
 
-SERVICE_NAME="rhythmai-task-service"
+SERVICE_NAME="havq-task-service"
 PID_FILE="$SERVICE_NAME.pid"
 
 # Colors for output
@@ -14,14 +14,14 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}🛑 Stopping Rhythmai Task Service${NC}"
+echo -e "${BLUE}🛑 Stopping Havq Task Service${NC}"
 
 # Check if PID file exists
 if [ ! -f "$PID_FILE" ]; then
     echo -e "${YELLOW}⚠️  No PID file found${NC}"
     
     # Try to find any running process
-    RUNNING_PIDS=$(pgrep -f "rhythmai-task-service" || true)
+    RUNNING_PIDS=$(pgrep -f "havq-task-service" || true)
     if [ -n "$RUNNING_PIDS" ]; then
         echo -e "${YELLOW}   Found running processes: $RUNNING_PIDS${NC}"
         echo -e "${YELLOW}   Attempting to stop...${NC}"
@@ -29,7 +29,7 @@ if [ ! -f "$PID_FILE" ]; then
         sleep 2
         
         # Force kill if still running
-        STILL_RUNNING=$(pgrep -f "rhythmai-task-service" || true)
+        STILL_RUNNING=$(pgrep -f "havq-task-service" || true)
         if [ -n "$STILL_RUNNING" ]; then
             echo -e "${YELLOW}   Force stopping...${NC}"
             echo $STILL_RUNNING | xargs kill -KILL 2>/dev/null || true

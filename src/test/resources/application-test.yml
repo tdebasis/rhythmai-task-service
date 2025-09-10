@@ -1,7 +1,7 @@
 spring:
   data:
     mongodb:
-      uri: mongodb://localhost:27017/rhythmai-tasks-test
+      uri: mongodb://localhost:27017/havq-tasks-test
       auto-index-creation: true
   
   profiles:
@@ -10,7 +10,7 @@ spring:
 logging:
   level:
     root: INFO
-    com.rhythmai: DEBUG
+    com.havq: DEBUG
     org.springframework.data.mongodb: DEBUG
 
 # Disable actuator endpoints for tests
